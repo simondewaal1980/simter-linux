@@ -1,0 +1,86 @@
+# sxhkdrc — sneltoetsen voor de BSPWM + Quickshell-desktop
+#
+# Bron: ~/projecten/quickshell/config/sxhkd/sxhkdrc
+# Gedeployed als symlink: ~/.config/sxhkd/sxhkdrc
+#
+# Herladen na een wijziging:  pkill -USR1 sxhkd
+# Controleren op fouten:      sxhkd -c ~/.config/sxhkd/sxhkdrc
+#
+# Conventie voor het sneltoetsenoverzicht (fase 8):
+#   - een comment direct boven een hotkey is de omschrijving
+#   - "# --- Sectie ---" begint een groep
+#   - ingesprongen regels onder een hotkey zijn het commando
+
+# --- Applicaties ---
+
+# Terminal
+super + Return
+	alacritty
+
+# Applicatielauncher
+super + d
+	rofi -show drun
+
+# Bestandsbeheer
+super + shift + f
+	pcmanfm-qt
+
+# --- Vensters ---
+
+# Focus naar links/onder/boven/rechts
+super + {h,j,k,l}
+	bspc node -f {west,south,north,east}
+
+# Venster verplaatsen naar links/onder/boven/rechts
+super + shift + {h,j,k,l}
+	bspc node -s {west,south,north,east}
+
+# Venster sluiten
+super + q
+	bspc node -c
+
+# Venster geforceerd beëindigen
+super + shift + q
+	bspc node -k
+
+# Fullscreen aan/uit
+super + f
+	bspc node -t fullscreen
+
+# Venster zwevend maken
+super + s
+	bspc node -t floating
+
+# Venster weer betegelen
+super + t
+	bspc node -t tiled
+
+# --- Workspaces ---
+
+# Desktop 1-9
+super + {1-9}
+	bspc desktop -f '^{1-9}'
+
+# Venster naar desktop 1-9 verplaatsen (en volgen)
+super + shift + {1-9}
+	bspc node -d '^{1-9}' --follow
+
+# Vorige desktop
+super + Tab
+	bspc desktop -f last
+
+# --- Layout ---
+
+# Monocle/tiled wisselen
+super + m
+	bspc desktop -l next
+
+# --- Sessie ---
+
+# BSPWM herstarten (settings.json wordt opnieuw toegepast)
+super + ctrl + r
+	bspc wm -r
+
+# Sxhkd herladen
+super + ctrl + s
+	pkill -USR1 sxhkd

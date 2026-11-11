@@ -1,0 +1,35 @@
+{
+  "window_gap": 8,
+  "border_width": 2,
+  "split_ratio": 0.52,
+  "padding": {
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+  },
+  "colors": {
+    "focused": "#89b4fa",
+    "normal": "#313244",
+    "active": "#6c7086",
+    "presel_feedback": "#94e2d5"
+  },
+  "behavior": {
+    "focus_follows_pointer": true,
+    "pointer_follows_focus": false,
+    "click_to_focus": "any",
+    "pointer_modifier": "mod4",
+    "swallow_first_click": false,
+    "ignore_ewmh_fullscreen": "none",
+    "remove_unplugged_monitors": true,
+    "merge_overlapping_monitors": false
+  },
+  "layout": {
+    "automatic_scheme": "longest_side",
+    "initial_polarity": "second_child",
+    "single_monocle": false,
+    "borderless_singleton": false,
+    "borderless_monocle": false,
+    "gapless_monocle": false
+  }
+}

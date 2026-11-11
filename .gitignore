@@ -1,0 +1,8 @@
+# Editor/LSP-hulpmiddelen
+.qmlls.ini
+qmlls.ini
+
+# Logs en tijdelijke bestanden
+*.log
+*.swp
+*~

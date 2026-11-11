@@ -1,0 +1,92 @@
+#!/bin/sh
+# bspwmrc — BSPWM-sessie voor de Quickshell-desktop.
+#
+# Bron: /home/simon/projecten/quickshell/config/bspwm/bspwmrc
+# Gedeployed als symlink: ~/.config/bspwm/bspwmrc
+#
+# Dit script draait bij elke login en opnieuw bij `bspc wm -r`.
+# Alle instellingen komen uit ~/.config/bspwm/settings.json via
+# apply-settings.sh, zodat BSPWM en de Quickshell-bar dezelfde bron gebruiken.
+
+CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/bspwm
+QUICKSHELL_DIR=$HOME/projecten/quickshell
+
+# --- Hulptools ------------------------------------------------------------
+# Start een programma alleen als het nog niet op dít scherm draait. Zo
+# overleeft een herstart (bspc wm -r) geen dubbele instanties en negeren we
+# processen van een vorige sessie.
+
+same_display() {
+  [ -r "/proc/$1/environ" ] || return 1
+  tr '\0' '\n' <"/proc/$1/environ" 2>/dev/null | grep -qx "DISPLAY=$DISPLAY"
+}
+
+running() {
+  for pid in $(pgrep -x "$1" 2>/dev/null); do
+    same_display "$pid" && return 0
+  done
+  return 1
+}
+
+running_pattern() {
+  for pid in $(pgrep -f "$1" 2>/dev/null); do
+    same_display "$pid" && return 0
+  done
+  return 1
+}
+
+spawn_once() {
+  name=$1
+  shift
+  if running "$name"; then
+    return 0
+  fi
+  "$@" >/dev/null 2>&1 &
+}
+
+# --- Desktops en basisgedrag ----------------------------------------------
+
+bspc monitor -d 1 2 3 4 5 6 7 8 9
+
+# Defaults; settings.json (hieronder) overschrijft ze.
+bspc config border_width 2
+bspc config window_gap 8
+bspc config focus_follows_pointer true
+bspc config split_ratio 0.52
+bspc config normal_border_color "#313244"
+bspc config focused_border_color "#89b4fa"
+bspc config active_border_color "#6c7086"
+bspc config presel_feedback_color "#94e2d5"
+
+# Eén bron van waarheid: pas settings.json toe (faalt zacht zonder bspc).
+if [ -x "$CONFIG_DIR/apply-settings.sh" ]; then
+  "$CONFIG_DIR/apply-settings.sh" || echo "bspwmrc: apply-settings.sh kon niet alles toepassen" >&2
+fi
+
+# --- Vensterregels --------------------------------------------------------
+
+# Quickshell-vensters (instellingen, sneltoetsen, popups) zweven gecentreerd.
+bspc rule -a quickshell-bspwm state=floating center=on
+bspc rule -a Quickshell state=floating center=on
+
+# --- Sessieprocessen ------------------------------------------------------
+
+# Sneltoetsen
+spawn_once sxhkd sxhkd
+
+# Wallpaper (feh zet de achtergrond en stopt daarna; dat is normaal)
+if [ -r "$HOME/Pictures/wallpaper.jpg" ]; then
+  feh --bg-fill "$HOME/Pictures/wallpaper.jpg" >/dev/null 2>&1
+fi
+
+# Compositor (schaduwen/transparantie); optioneel, mag ontbreken.
+if [ -r "$HOME/.config/picom/picom.conf" ] && command -v picom >/dev/null 2>&1; then
+  spawn_once picom picom --config "$HOME/.config/picom/picom.conf"
+fi
+
+# Quickshell (bar, notificaties, tray). Vanaf fase 2 staat hier shell.qml.
+if command -v qs >/dev/null 2>&1 && [ -f "$QUICKSHELL_DIR/shell.qml" ]; then
+  if ! running_pattern "qs -p $QUICKSHELL_DIR"; then
+    qs -p "$QUICKSHELL_DIR" >"/tmp/quickshell-$USER.log" 2>&1 &
+  fi
+fi
