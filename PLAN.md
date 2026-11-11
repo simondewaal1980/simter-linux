@@ -12,7 +12,7 @@
 ## Voortgang
 
 - [x] Fase 1 — Pakketten, bspwm-sessie en basisconfiguratie
-- [ ] Fase 2 — Quickshell-skelet, thema en bar met workspaces/klok
+- [x] Fase 2 — Quickshell-skelet, thema en bar met workspaces/klok
 - [ ] Fase 3 — BSPWM-integratie (report-parser, klikbare workspaces)
 - [ ] Fase 4 — Weer Eindhoven
 - [ ] Fase 5 — Systemtray
@@ -248,23 +248,55 @@ Quickshell schrijft dit bestand en past wijzigingen direct toe met `bspc config`
 
 ### Stappen
 
-- [ ] `shell.qml` met `ShellRoot`, `Variants { model: Quickshell.screens }` en één `Bar` per scherm.
-- [ ] `src/theme/Theme.qml` (singleton) + `qmldir`; leest `~/.config/bspwm/settings.json` via `FileView` met `watchChanges: true` en bevat het kleurenpalet.
-- [ ] `src/components/Bar.qml`: `PanelWindow`, hoogte ±34 px, `anchors { top; left; right }`, automatische `exclusiveZone`, `aboveWindows: true`, `focusable: false`.
-- [ ] Indeling: links workspaces (tijdelijk statisch), midden klok/datum, rechts tijdelijke iconen.
-- [ ] `src/components/Clock.qml` met `SystemClock`.
-- [ ] IPC-handlers toevoegen (`bar` met `reload`/`toggle`).
-- [ ] `.qmlls.ini` aanmaken voor editor/LSP.
+- [x] `shell.qml` met `ShellRoot`, `Variants { model: Quickshell.screens }` en één `Bar` per scherm.
+- [x] `src/theme/Theme.qml` (singleton) + `qmldir`; leest `~/.config/bspwm/settings.json` via `FileView` met `watchChanges: true` en bevat het kleurenpalet.
+- [x] `src/components/Bar.qml`: `PanelWindow`, hoogte ±34 px, `anchors { top; left; right }`, automatische `exclusiveZone`, `aboveWindows: true`, `focusable: false`.
+- [x] Indeling: links workspaces (tijdelijk statisch), midden klok/datum, rechts tijdelijke iconen.
+- [x] `src/components/Clock.qml` met `SystemClock`.
+- [x] IPC-handlers toevoegen (`bar` met `reload`/`toggle`).
+- [x] `.qmlls.ini` aanmaken voor editor/LSP.
 
 ### Verificatie
 
-- [ ] `qs -p ~/projecten/quickshell` start zonder fouten; bar staat boven.
-- [ ] `xprop -root _NET_WM_STRUT_PARTIAL` toont gereserveerde ruimte.
-- [ ] Een getiled venster overlapt de bar niet.
-- [ ] Fullscreen testen (`Super+f`): blijft de bar zichtbaar? Zo niet, noteer dit en test de mitigatie `bspc config ignore_ewmh_fullscreen enter`.
-- [ ] `qs ipc show` toont de handler(s).
+- [x] `qs -p ~/projecten/quickshell` start zonder fouten; bar staat boven.
+- [x] `xprop -root _NET_WM_STRUT_PARTIAL` toont gereserveerde ruimte.
+      → Let op: EWMH zet de strut op het *barvenster*, niet op de root. Correcte
+      controle: `xprop -id <bar-window> _NET_WM_STRUT_PARTIAL` (of
+      `xprop -root _NET_SUPPORTED` voor ondersteuning). BSPWM vertaalt de strut
+      naar `padding.top` van de monitor; `bspc query -T -m` bevestigt dat.
+- [x] Een getiled venster overlapt de bar niet.
+- [x] Fullscreen testen (`Super+f`): blijft de bar zichtbaar? Zo niet, noteer dit en test de mitigatie `bspc config ignore_ewmh_fullscreen enter`.
+- [x] `qs ipc show` toont de handler(s).
 
 **Klaar als:** de bar stabiel draait, struts kloppen en de klok loopt. Dit is ook het moment om te controleren of de bar boven fullscreen blijft; leg de uitkomst vast.
+
+### Uitvoeringsnotities (fase 2)
+
+- Getest op de echte sessie (`DISPLAY=:0`, bspwm) op 1280×800 én na een
+  resolutiewijziging naar 1920×1080. De bar schaalt automatisch mee; de strut
+  wordt op beide resoluties bijgewerkt (34 px, breedte = schermbreedte).
+- **Fullscreen (#290):** de bar blijft onder bspwm zichtbaar boven een
+  fullscreen-venster (`bspc node -t fullscreen`). De mitigerende
+  `ignore_ewmh_fullscreen enter` is hier dus niet nodig.
+- De strut staat op het Quickshell-paneelvenster, niet op de root:
+  `_NET_WM_STRUT_PARTIAL = 0, 0, 34, 0, …`. BSPWM zet dit om naar
+  `padding.top: 34` op de monitor, waardoor getilde vensters op y=42 beginnen
+  (34 bar + 8 gap).
+- `Theme` gebruikt `JsonAdapter` in plaats van `JSON.parse(FileView.text())`:
+  dat is reactief zonder bindingslus. Een wijziging van
+  `colors.focused` in `settings.json` kleurt de actieve workspace direct mee.
+- `qs ipc call bar toggle` verbergt de bar; bij opnieuw tonen maakt Quickshell
+  het native venster opnieuw aan. BSPWM laat de gereserveerde bovenruimte
+  intussen staan (het werkgebied wordt niet opnieuw berekend); de bar komt wel
+  netjes terug. `qs ipc call bar reload` herlaadt de QML zonder herstart.
+- De datum wordt met `Date.toLocaleDateString(Qt.locale("nl_NL"), …)` geformatteerd;
+  `Qt.formatDateTime()` volgde de C-locale en gaf Engelse afkortingen.
+- `qmlls`/`qmllint` is niet geïnstalleerd (`qt6-declarative-dev-tools` ontbreekt);
+  `.qmlls.ini` staat klaar met `importPaths` en `no-cmake-calls` voor een editor
+  die de Qt-tools wel heeft. De shell zelf is gevalideerd door `qs` te starten
+  en de log op QML-fouten te controleren.
+- Workspaces zijn in deze fase bewust nog statisch (1 focus, 2 en 4 bezet) en
+  alleen visueel klikbaar; fase 3 koppelt ze aan `bspc subscribe report`.
 
 ---
 
