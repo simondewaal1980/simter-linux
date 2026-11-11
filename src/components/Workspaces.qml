@@ -1,32 +1,72 @@
-// Workspaces.qml — tijdelijke, statische workspace-indicator voor fase 2.
+// Workspaces.qml — live workspace-indicator voor de bar.
 //
-// Fase 3 vervangt de vaste waarden door de Bspwm-service (live report-parser),
-// klikken en scrollen. De basisstyling blijft dan hetzelfde.
+// De gegevens komen uit de Bspwm-service (één `bspc subscribe report` voor de
+// hele shell). Tot die service een rapport heeft ontvangen — bijvoorbeeld in
+// een LXQt-sessie zonder bspwm — toont de component een terugvalrij 1–9, zodat
+// de bar ook zonder window manager bruikbaar blijft.
+//
+// Klikken focust de desktop; scrollen gaat naar de vorige/volgende desktop.
+// Rechts van de workspaces staat de layoutindicator (T = tiled, M = monocle);
+// die is ook klikbaar om te wisselen. Zonder bspwm verschijnt een foutlabel.
 
 import QtQuick
 import "../theme"
+import "../services"
 
 Row {
     id: root
 
-    property int count: 9
-    property int currentIndex: 0
-    property var occupiedIndices: [1, 3]
-    property var urgentIndices: []
+    // Naam van de monitor waar deze bar bij hoort (ShellScreen.name).
+    property string monitorName: ""
 
     spacing: Theme.spacingSmall
 
+    readonly property var desktops: {
+        if (!Bspwm.available)
+            return root.fallbackDesktops()
+
+        var list = Bspwm.desktopsForMonitor(root.monitorName)
+        return list.length > 0 ? list : root.fallbackDesktops()
+    }
+
+    function fallbackDesktops() {
+        var result = []
+        for (var i = 0; i < 9; i++) {
+            result.push({
+                name: String(i + 1),
+                monitor: "",
+                focused: i === 0,
+                occupied: false,
+                urgent: false
+            })
+        }
+        return result
+    }
+
+    // Scrollen over de workspaces wisselt van desktop.
+    WheelHandler {
+        enabled: Bspwm.available
+
+        onWheel: (event) => {
+            if (event.angleDelta.y > 0)
+                Bspwm.focusPrev()
+            else if (event.angleDelta.y < 0)
+                Bspwm.focusNext()
+        }
+    }
+
     Repeater {
-        model: root.count
+        model: root.desktops
 
         delegate: Rectangle {
             id: item
 
+            required property var modelData
             required property int index
 
-            readonly property bool isFocused: index === root.currentIndex
-            readonly property bool isOccupied: root.occupiedIndices.indexOf(index) >= 0
-            readonly property bool isUrgent: root.urgentIndices.indexOf(index) >= 0
+            readonly property bool isFocused: modelData.focused === true
+            readonly property bool isOccupied: modelData.occupied === true
+            readonly property bool isUrgent: modelData.urgent === true
 
             width: 24
             height: 22
@@ -44,10 +84,12 @@ Row {
 
             Text {
                 anchors.centerIn: parent
-                text: item.index + 1
-                color: item.isFocused ? Theme.crust
-                     : item.isOccupied ? Theme.workspaceOccupied
-                     : Theme.workspaceEmpty
+                text: item.modelData.name
+                color: {
+                    if (item.isUrgent || item.isFocused)
+                        return Theme.crust
+                    return item.isOccupied ? Theme.workspaceOccupied : Theme.workspaceEmpty
+                }
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontNormal
                 font.weight: item.isFocused ? Font.DemiBold : Font.Normal
@@ -59,9 +101,50 @@ Row {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
 
-                // Alleen visueel; de echte desktopwissel volgt in fase 3.
-                onClicked: root.currentIndex = item.index
+                onClicked: {
+                    if (Bspwm.available)
+                        Bspwm.focusDesktop(item.modelData.name, item.modelData.monitor, item.index)
+                }
             }
         }
+    }
+
+    // Layoutindicator: alleen zinvol als bspwm bereikbaar is.
+    Rectangle {
+        id: layoutBadge
+
+        readonly property bool isMonocle: Bspwm.layoutForMonitor(root.monitorName) === "monocle"
+
+        visible: Bspwm.available
+        width: 22
+        height: 22
+        radius: Theme.radiusSmall
+        color: layoutHover.containsMouse ? Theme.surface0 : "transparent"
+
+        Text {
+            anchors.centerIn: parent
+            text: layoutBadge.isMonocle ? "M" : "T"
+            color: Theme.accentMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSmall
+            font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+            id: layoutHover
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: Bspwm.toggleLayout()
+        }
+    }
+
+    // Foutpad: bspc ontbreekt of er is geen bspwm-sessie.
+    Text {
+        visible: !Bspwm.available
+        text: "bspwm niet actief"
+        color: Theme.red
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontSmall
     }
 }

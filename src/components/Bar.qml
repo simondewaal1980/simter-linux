@@ -43,9 +43,10 @@ PanelWindow {
             color: Theme.borderNormal
         }
 
-        // Links: workspaces (fase 2 nog statisch; fase 3 koppelt BSPWM).
+        // Links: live workspaces + layoutindicator.
         Workspaces {
             id: workspaces
+            monitorName: bar.screen ? bar.screen.name : ""
             anchors {
                 left: parent.left
                 leftMargin: Theme.barPadding
@@ -58,8 +59,9 @@ PanelWindow {
             anchors.centerIn: parent
         }
 
-        // Rechts: tijdelijke iconen. Volume, netwerk en accu krijgen in latere
-        // fasen een echte widget (tray in fase 5, volume/accu in fase 9).
+        // Rechts: venstertitel en tijdelijke iconen. Volume, netwerk en accu
+        // krijgen in latere fasen een echte widget (tray in fase 5,
+        // volume/accu in fase 9).
         Row {
             anchors {
                 right: parent.right
@@ -67,6 +69,20 @@ PanelWindow {
                 verticalCenter: parent.verticalCenter
             }
             spacing: 14
+
+            ActiveWindow {
+                id: activeWindow
+                maxWidth: 340
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: activeWindow.visible
+                width: 1
+                height: 14
+                color: Theme.surface1
+            }
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter

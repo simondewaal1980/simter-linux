@@ -1,15 +1,15 @@
-// shell.qml — root van de Quickshell-desktop (fase 2).
+// shell.qml — root van de Quickshell-desktop (fase 3).
 //
 // Starten: qs -p /home/simon/projecten/quickshell
 //
-// Fase 2 levert een skelet met één bar per scherm, een thema-singleton dat
-// ~/.config/bspwm/settings.json volgt, workspaces (nog statisch) en een klok.
-// De BSPWM-koppeling volgt in fase 3.
+// Eén bar per scherm met live workspaces (Bspwm-service), layoutindicator,
+// venstertitel en klok. De BSPWM-status komt uit `bspc subscribe report`.
 
 import QtQuick
 import Quickshell
 import Quickshell.Io
 import "src/components"
+import "src/services"
 
 ShellRoot {
     id: root
@@ -40,6 +40,24 @@ ShellRoot {
         // Verbergt of toont de bar op alle schermen.
         function toggle(): void {
             root.barVisible = !root.barVisible
+        }
+    }
+
+    // Diagnostiek: qs ipc call bspwm status
+    IpcHandler {
+        target: "bspwm"
+
+        function status(): string {
+            return JSON.stringify({
+                available: Bspwm.available,
+                error: Bspwm.lastError,
+                focusedMonitor: Bspwm.focusedMonitor,
+                focusedDesktop: Bspwm.focusedDesktop,
+                layout: Bspwm.layout,
+                activeNodeState: Bspwm.activeNodeState,
+                activeNodeFlags: Bspwm.activeNodeFlags,
+                desktops: Bspwm.desktops
+            })
         }
     }
 }

@@ -13,7 +13,7 @@
 
 - [x] Fase 1 — Pakketten, bspwm-sessie en basisconfiguratie
 - [x] Fase 2 — Quickshell-skelet, thema en bar met workspaces/klok
-- [ ] Fase 3 — BSPWM-integratie (report-parser, klikbare workspaces)
+- [x] Fase 3 — BSPWM-integratie (report-parser, klikbare workspaces)
 - [ ] Fase 4 — Weer Eindhoven
 - [ ] Fase 5 — Systemtray
 - [ ] Fase 6 — Notificatieserver, popups en centrum
@@ -306,26 +306,66 @@ Quickshell schrijft dit bestand en past wijzigingen direct toe met `bspc config`
 
 ### Stappen
 
-- [ ] `src/services/Bspwm.qml`:
-  - [ ] `bspc wm -g` bij startup voor de beginstatus.
-  - [ ] `Process { command: ["bspc", "subscribe", "report"] }` met `SplitParser`.
-  - [ ] `src/utils/ReportParser.js` parseert `M/m`, `O/o`, `F/f`, `U/u`, `L(T|M)`, `T(...)`, `G(...)`.
-  - [ ] Properties: `monitors`, `desktops`, `focusedDesktop`, `layout`, `activeNodeState`, `activeNodeFlags`.
-  - [ ] Commando's: `focusDesktop(name)`, `focusNext/Prev`, `toggleLayout()`.
-  - [ ] Foutpad: "bspwm niet actief" tonen als `bspc` ontbreekt of faalt.
-- [ ] `src/components/Workspaces.qml`: 1–9, focus/bezet/urgent-styling, layoutindicator (T/M), klikken en scrollen.
-- [ ] `src/components/ActiveWindow.qml` (optioneel): `xdotool getactivewindow getwindowname`, verversen op `node_focus`.
-- [ ] Werkt ook zonder bspwm (voor testen in LXQt).
+- [x] `src/services/Bspwm.qml`:
+  - [x] `bspc wm -g` bij startup voor de beginstatus.
+  - [x] `Process { command: ["bspc", "subscribe", "report"] }` met `SplitParser`.
+  - [x] `src/utils/ReportParser.js` parseert `M/m`, `O/o`, `F/f`, `U/u`, `L(T|M)`, `T(...)`, `G(...)`.
+  - [x] Properties: `monitors`, `desktops`, `focusedDesktop`, `layout`, `activeNodeState`, `activeNodeFlags`.
+  - [x] Commando's: `focusDesktop(name)`, `focusNext/Prev`, `toggleLayout()`.
+  - [x] Foutpad: "bspwm niet actief" tonen als `bspc` ontbreekt of faalt.
+- [x] `src/components/Workspaces.qml`: 1–9, focus/bezet/urgent-styling, layoutindicator (T/M), klikken en scrollen.
+- [x] `src/components/ActiveWindow.qml` (optioneel): titel van de gefocuste bspwm-node, verversen op `node_focus`.
+- [x] Werkt ook zonder bspwm (voor testen in LXQt).
 
 ### Verificatie
 
-- [ ] Desktop wisselen via toetsen én via de bar; status klopt direct.
-- [ ] Een venster openen/sluiten kleurt de juiste workspace.
-- [ ] Urgent-hint testen: `bspc node -g urgent` op een venster.
-- [ ] Layout wisselen (`Super+m`) toont M/T in de bar.
-- [ ] `bspc wm -r` laat de bar netjes herstarten of opnieuw verbinden.
+- [x] Desktop wisselen via toetsen én via de bar; status klopt direct.
+- [x] Een venster openen/sluiten kleurt de juiste workspace.
+- [x] Urgent-hint testen (`bspc node -g urgent` bestaat niet in 0.9.12; getest via de ICCCM WM_HINTS-urgency op een venster op een niet-gefocuste desktop).
+- [x] Layout wisselen (`Super+m`) toont M/T in de bar.
+- [x] `bspc wm -r` laat de bar netjes herstarten of opnieuw verbinden.
 
 **Klaar als:** de bar de BSPWM-status foutloos en zonder merkbare vertraging volgt.
+
+### Uitvoeringsnotities (fase 3)
+
+- **Reportformaat:** de regel begint met `status_prefix` (standaard `W`), direct
+  gevolgd door de eerste monitor. Daarna volgen per monitor de desktops
+  (`O/o/F/f/U/u`), één `L(T|M)` en — alleen als die desktop een gefocuste node
+  heeft — `T(T|P|F|=|@)` en `G(S?P?L?M?)`. Ontbreekt de gefocuste node (lege
+  desktop), dan ontbreken `T` en `G` volledig; de parser zet de state dan op
+  leeg. `T@` betekent een receptacle zonder client. `G` gebruikt
+  S=sticky, P=private, L=locked, M=marked.
+- **Node-states:** `T` = tiled, `P` = pseudo_tiled, `F` = floating,
+  `=` = fullscreen, `@` = receptacle. De parser bewaart de layout en node-
+  status alleen van de gefocuste monitor (hoofdletter `M`), zodat een tweede
+  monitor het beeld niet overschrijft.
+- **Desktopselectie:** `bspc desktop -f <monitor>:<naam>` is geen geldige
+  selector; `monitor:^n` (de n-de desktop van die monitor) wel. De bar geeft
+  daarom de index mee. Klikken, scrollen (`next`/`prev`) en de layoutbadge
+  (klik = `bspc desktop -l next`) zijn op de echte sessie getest.
+- **Urgent:** `bspc node -g urgent` is in bspwm 0.9.12 geen geldige sleutel.
+  Urgency wordt extern via `WM_HINTS` gezet; bovendien negeert bspwm urgentie
+  op de gefocuste node van de gefocuste desktop. Getest met een xterm op
+  desktop 2: het rapport werd `u2`, workspace 2 kleurde rood, en focus naar
+  desktop 2 wist de urgentie weer.
+- **Venstertitel:** `xdotool getactivewindow` blijft na het wisselen naar een
+  lege desktop het verborgen venster teruggeven. Daarom vraagt ActiveWindow
+  eerst `bspc query -N -n focused` op en haalt daarna de titel van precies die
+  node op. Zonder bspwm (LXQt) valt het terug op `getactivewindow`. Naast
+  `node_focus` ververst ook een wijziging van `focusedDesktop` en een poll van
+  5 s (voor titelwijzigingen zonder focuswissel).
+- **Herverbinden:** als `bspc subscribe report` stopt (bijvoorbeeld door
+  `bspc wm -r`), zet de service `available` op false en probeert elke 5 s
+  opnieuw verbinding te maken met `bspc wm -g` + een nieuw abonnement. Getest
+  door het subscribe-proces te killen én met een echte `bspc wm -r`: de bar
+  bleef draaien en had binnen enkele seconden weer de juiste status.
+- **Zonder bspwm:** getest in een geneste Xephyr (`:1`) met een ongeldige
+  `BSPWM_SOCKET`. De bar toont dan de terugvalrij 1–9 met "bspwm niet actief";
+  er verschijnen geen QML-fouten en de rest van de bar blijft werken.
+- **Diagnostiek:** `qs ipc call bspwm status` geeft de volledig geparseerde
+  status als JSON (monitors, desktops, layout, node-state en flags). Handig om
+  de bar met `bspc wm -g` te vergelijken.
 
 ---
 
