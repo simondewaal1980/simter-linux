@@ -11,7 +11,7 @@
 
 ## Voortgang
 
-- [ ] Fase 1 — Pakketten, bspwm-sessie en basisconfiguratie
+- [x] Fase 1 — Pakketten, bspwm-sessie en basisconfiguratie
 - [ ] Fase 2 — Quickshell-skelet, thema en bar met workspaces/klok
 - [ ] Fase 3 — BSPWM-integratie (report-parser, klikbare workspaces)
 - [ ] Fase 4 — Weer Eindhoven
@@ -41,8 +41,8 @@ Deze keuzes zijn als default vastgelegd zodat de fasen uitvoerbaar zijn. Ze zijn
 
 | Onderdeel | Status |
 |---|---|
-| `quickshell` 0.3.2 in sid | beschikbaar, nog niet geïnstalleerd |
-| `bspwm` 0.9.12 + `sxhkd` 0.6.3 | beschikbaar, nog niet geïnstalleerd |
+| `quickshell` 0.3.2 in sid | geïnstalleerd (0.3.2-1) |
+| `bspwm` 0.9.12 + `sxhkd` 0.6.3 | geïnstalleerd (0.9.12-1, 0.6.3-1) |
 | `qs`-binary | symlink naar `quickshell` in het Debian-pakket |
 | X11-sessiebestand | `/usr/share/xsessions/bspwm.desktop` zit in het bspwm-pakket |
 | Qt / OpenGL | Qt 6.11, `/dev/dri` aanwezig |
@@ -141,24 +141,29 @@ Quickshell schrijft dit bestand en past wijzigingen direct toe met `bspc config`
 
 ### Stappen
 
-- [ ] Pakketten installeren:
+- [x] Pakketten installeren:
 
   ```bash
   sudo apt update
   sudo apt install quickshell bspwm sxhkd jq curl xdotool \
     fonts-jetbrains-mono fonts-font-awesome papirus-icon-theme \
-    picom feh rofi maim slop \
-    network-manager-gnome blueman pavucontrol playerctl brightnessctl
+    picom feh rofi maim slop alacritty \
+    network-manager-applet blueman pavucontrol playerctl brightnessctl
   ```
 
-- [ ] Optioneel voor veilig testen in een geneste X-server:
+  > `network-manager-gnome` bestaat niet meer in sid; de opvolger is
+  > `network-manager-applet` (levert `nm-applet`). `alacritty` is toegevoegd
+  > omdat het de standaardterminal is (ontbrak in de oorspronkelijke lijst).
+
+- [x] Optioneel voor veilig testen in een geneste X-server:
 
   ```bash
   sudo apt install xserver-xephyr
   ```
 
-- [ ] Mapstructuur aanmaken (zie sectie 2) en `git init` indien gewenst.
-- [ ] `config/bspwm/bspwmrc` schrijven (executable maken):
+- [x] Mapstructuur aanmaken (zie sectie 2) en `git init` (met `.gitignore`).
+
+- [x] `config/bspwm/bspwmrc` geschreven (executable gemaakt):
 
   ```sh
   #!/bin/sh
@@ -173,9 +178,16 @@ Quickshell schrijft dit bestand en past wijzigingen direct toe met `bspc config`
   qs -p "$HOME/projecten/quickshell" &
   ```
 
-- [ ] `config/bspwm/settings.default.json` met startwaarden (gaps, randen, padding, kleuren, gedrag, layout).
-- [ ] `scripts/apply-bspwm-settings.sh` schrijven: leest `~/.config/bspwm/settings.json` met `jq` en past `bspc config`, per-monitor padding en kleuren toe. Kopieer naar `~/.config/bspwm/apply-settings.sh`.
-- [ ] Symlinks aanmaken:
+  > Afwijkingen: `presel_feedback_color` i.p.v. niet-bestaande presel-kleuren,
+  > en hulptools worden alleen gestart als ze nog niet op dít scherm draaien
+  > (voorkomt dubbele processen na `bspc wm -r`). `qs` start pas als
+  > `shell.qml` bestaat, dus vanaf fase 2.
+
+- [x] `config/bspwm/settings.default.json` met startwaarden (gaps, randen, padding, kleuren, gedrag, layout).
+
+- [x] `scripts/apply-bspwm-settings.sh` geschreven: leest `~/.config/bspwm/settings.json` met `jq` en past `bspc config`, per-monitor padding en kleuren toe. Gedeployed als symlink `~/.config/bspwm/apply-settings.sh` (één bron, geen kopie).
+
+- [x] Symlinks aanmaken:
 
   ```bash
   mkdir -p ~/.config/bspwm ~/.config/sxhkd ~/.config/picom
@@ -185,17 +197,46 @@ Quickshell schrijft dit bestand en past wijzigingen direct toe met `bspc config`
   ln -sf ~/projecten/quickshell/config/picom/picom.conf ~/.config/picom/picom.conf
   ```
 
-- [ ] Eerste `config/sxhkd/sxhkdrc` met basisbindings (`Super+Return` terminal, `Super+d` rofi, `Super+q` sluiten, workspaces).
-- [ ] Wallpaper kiezen en op `~/Pictures/wallpaper.jpg` zetten.
+  Aanvullend: `~/.config/bspwm/apply-settings.sh` en
+  `~/.config/bspwm/settings.default.json` zijn symlinks naar de repo, en
+  `~/.config/bspwm/settings.json` is een kopie van de default (het
+  gebruikersbestand dat Quickshell in fase 7 schrijft).
+
+- [x] Eerste `config/sxhkd/sxhkdrc` met basisbindings (`Super+Return` terminal, `Super+d` rofi, `Super+q` sluiten, workspaces).
+
+- [x] Wallpaper gekozen en op `~/Pictures/wallpaper.jpg` gezet (gegenereerd met `ffmpeg`: donkere Catppuccin-gradient, 1920×1080).
+
 - [ ] Inloggen via SDDM met de **bspwm**-sessie (LXQt blijft als fallback).
+      → vraagt een handmatige logout/login; `bspwm.desktop` staat klaar in
+      `/usr/share/xsessions/`.
 
 ### Verificatie
 
-- [ ] `bspc query -M --names` geeft je monitor.
-- [ ] `pgrep -x bspwm`, `pgrep -x sxhkd` en `pgrep -x picom` draaien.
-- [ ] `Super+Return` opent een terminal; `Super+d` opent rofi.
-- [ ] `bspc config window_gap` geeft de waarde uit `settings.json`.
-- [ ] Herstarten van bspwm (`bspc wm -r`) behoudt de instellingen.
+- [x] `bspc query -M --names` geeft je monitor. (Genest: `default`; in de echte sessie `Virtual-1`.)
+- [x] `pgrep -x bspwm`, `pgrep -x sxhkd` en `pgrep -x picom` draaien.
+- [x] `Super+Return` opent een terminal; `Super+d` opent rofi.
+- [x] `bspc config window_gap` geeft de waarde uit `settings.json`.
+- [x] Herstarten van bspwm (`bspc wm -r`) behoudt de instellingen.
+
+### Uitvoeringsnotities (fase 1)
+
+- Getest in een geneste X-server (Xephyr op `:1`), zodat de LXQt-sessie op `:0`
+  ongemoeid bleef. Herhaalbaar met `scripts/test-fase1-nested.sh` (vereist
+  `xserver-xephyr`; start bspwm met de echte config en test de sneltoetsen).
+  Toetsen gesimuleerd met `xdotool key` **zonder**
+  `--clearmodifiers` (met die optie worden de synthetische Super-combinaties
+  niet door sxhkd opgepakt). Op echte hardware speelt dat niet.
+- **picom afgestemd op de VM-GPU:** de GLX-backend met vsync trok >300% CPU en
+  maakte de sessie ~16 s onresponsief (`Failed to enable vsync`). Daarom staat
+  de config op `backend = "xrender"`, `vsync = false`, `xrender-sync-fence = true`
+  — 0% CPU bij stilstand. Op echte hardware is `glx` te heroverwegen (fase 9).
+- bspwm 0.9.12 geeft exitcode 1 als je een boolean op dezelfde waarde zet;
+  `apply-bspwm-settings.sh` vergelijkt daarom eerst met de huidige waarde en
+  waarschuwt alleen bij een echte afwijking.
+- bspwm 0.9.12-sleutelnamen: `presel_feedback_color` (geen presel-focus/norm),
+  `pointer_modifier mod4` (kent geen `none`), `ignore_ewmh_fullscreen none|all|enter|exit`
+  (dus `all`, niet `both`).
+
 
 **Klaar als:** je een werkende bspwm-sessie hebt waarin sxhkd, wallpaper en picom draaien, en de JSON-instellingen bij herstart worden toegepast.
 
