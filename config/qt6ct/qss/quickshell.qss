@@ -1,0 +1,354 @@
+/* quickshell.qss — Qt Widgets-stijl die aansluit bij de Quickshell-widgets.
+ *
+ * Kleuren komen uit het QPalette dat scripts/apply-qt-theme.sh uit het
+ * wallpaper-palet genereert. Door palette(...) te gebruiken in plaats van
+ * vaste hex-waarden, verandert deze stylesheet automatisch mee met de
+ * wallpaper. Vormgeving: dezelfde 6px-hoeken, surface0/surface1-lagen en
+ * accentkleur als de bar en de popups.
+ */
+
+/* --- Algemeen --------------------------------------------------------- */
+
+QWidget {
+    selection-background-color: palette(highlight);
+    selection-color: palette(highlighted-text);
+}
+
+QToolTip {
+    background-color: palette(tool-tip-base);
+    color: palette(tool-tip-text);
+    border: 1px solid palette(alternate-base);
+    border-radius: 6px;
+    padding: 4px 7px;
+}
+
+/* --- Knoppen ---------------------------------------------------------- */
+
+QPushButton,
+QToolButton {
+    background-color: palette(button);
+    color: palette(button-text);
+    border: 1px solid palette(mid);
+    border-radius: 6px;
+    padding: 5px 12px;
+    min-height: 18px;
+}
+
+QToolButton {
+    background-color: transparent;
+    border-color: transparent;
+    padding: 4px;
+}
+
+QPushButton:hover,
+QToolButton:hover {
+    background-color: palette(midlight);
+}
+
+QPushButton:pressed,
+QToolButton:pressed {
+    background-color: palette(light);
+}
+
+QPushButton:default {
+    border-color: palette(highlight);
+    color: palette(highlight);
+}
+
+QPushButton:disabled,
+QToolButton:disabled {
+    background-color: palette(window);
+    color: palette(placeholder-text);
+    border-color: palette(mid);
+}
+
+/* --- Invoervelden ----------------------------------------------------- */
+
+QLineEdit,
+QComboBox,
+QTextEdit,
+QPlainTextEdit {
+    background-color: palette(base);
+    color: palette(text);
+    border: 1px solid palette(alternate-base);
+    border-radius: 6px;
+    padding: 4px 7px;
+}
+
+QLineEdit:hover,
+QComboBox:hover,
+QTextEdit:hover,
+QPlainTextEdit:hover {
+    border-color: palette(mid);
+}
+
+QLineEdit:focus,
+QComboBox:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus {
+    border-color: palette(highlight);
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: palette(window);
+    border: 1px solid palette(alternate-base);
+    border-radius: 6px;
+    padding: 4px;
+    outline: none;
+    selection-background-color: palette(highlight);
+    selection-color: palette(highlighted-text);
+}
+
+/* --- Menu's ----------------------------------------------------------- */
+
+QMenu {
+    background-color: palette(window);
+    border: 1px solid palette(alternate-base);
+    border-radius: 8px;
+    padding: 5px;
+}
+
+QMenu::item {
+    padding: 6px 22px 6px 10px;
+    border-radius: 5px;
+}
+
+QMenu::item:selected {
+    background-color: palette(alternate-base);
+    color: palette(text);
+}
+
+QMenu::item:disabled {
+    color: palette(placeholder-text);
+}
+
+QMenu::separator {
+    height: 1px;
+    background: palette(alternate-base);
+    margin: 4px 7px;
+}
+
+QMenuBar {
+    background-color: palette(window);
+    color: palette(window-text);
+}
+
+QMenuBar::item {
+    background: transparent;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+QMenuBar::item:selected {
+    background: palette(alternate-base);
+}
+
+/* --- Tabs ------------------------------------------------------------- */
+
+QTabWidget::pane {
+    border: 1px solid palette(alternate-base);
+    border-radius: 8px;
+    top: -1px;
+}
+
+QTabBar::tab {
+    background: transparent;
+    color: palette(placeholder-text);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 7px 13px;
+    margin-right: 3px;
+    margin-bottom: -1px;
+}
+
+QTabBar::tab:hover {
+    color: palette(text);
+    background: palette(alternate-base);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+QTabBar::tab:selected {
+    color: palette(highlight);
+    background: transparent;
+    border-bottom: 2px solid palette(highlight);
+}
+
+/* --- Lijsten, tabellen en bomen --------------------------------------- */
+
+QListView,
+QTreeView,
+QTableView,
+QColumnView {
+    background-color: palette(base);
+    alternate-background-color: palette(window);
+    border: 1px solid palette(alternate-base);
+    border-radius: 8px;
+    outline: none;
+    selection-background-color: palette(highlight);
+    selection-color: palette(highlighted-text);
+}
+
+QListView::item,
+QTreeView::item {
+    padding: 3px 5px;
+    border-radius: 4px;
+}
+
+QListView::item:hover,
+QTreeView::item:hover {
+    background-color: palette(alternate-base);
+}
+
+QTableCornerButton::section {
+    background-color: palette(alternate-base);
+    border: none;
+}
+
+QHeaderView::section {
+    background-color: palette(alternate-base);
+    color: palette(placeholder-text);
+    border: none;
+    border-right: 1px solid palette(window);
+    border-bottom: 1px solid palette(window);
+    padding: 5px 7px;
+}
+
+/* --- Groepen en scheidingslijnen -------------------------------------- */
+
+QGroupBox {
+    border: 1px solid palette(alternate-base);
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 6px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: palette(placeholder-text);
+}
+
+QSplitter::handle {
+    background-color: palette(alternate-base);
+}
+
+QSplitter::handle:horizontal {
+    width: 2px;
+}
+
+QSplitter::handle:vertical {
+    height: 2px;
+}
+
+/* --- Schuifbalken ----------------------------------------------------- */
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 2px;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 10px;
+    margin: 2px;
+}
+
+QScrollBar::handle:vertical,
+QScrollBar::handle:horizontal {
+    background: palette(midlight);
+    border-radius: 3px;
+    min-height: 24px;
+    min-width: 24px;
+}
+
+QScrollBar::handle:vertical:hover,
+QScrollBar::handle:horizontal:hover {
+    background: palette(highlight);
+}
+
+QScrollBar::add-line,
+QScrollBar::sub-line {
+    width: 0;
+    height: 0;
+    background: transparent;
+    border: none;
+}
+
+QScrollBar::add-page,
+QScrollBar::sub-page {
+    background: transparent;
+}
+
+/* --- Sliders en voortgang --------------------------------------------- */
+
+QSlider::groove:horizontal {
+    height: 4px;
+    background: palette(alternate-base);
+    border-radius: 2px;
+}
+
+QSlider::sub-page:horizontal {
+    background: palette(highlight);
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    background: palette(highlight);
+    border: 2px solid palette(window);
+    width: 10px;
+    height: 10px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+
+QSlider::groove:vertical {
+    width: 4px;
+    background: palette(alternate-base);
+    border-radius: 2px;
+}
+
+QSlider::add-page:vertical {
+    background: palette(highlight);
+    border-radius: 2px;
+}
+
+QSlider::handle:vertical {
+    background: palette(highlight);
+    border: 2px solid palette(window);
+    width: 10px;
+    height: 10px;
+    margin: 0 -5px;
+    border-radius: 7px;
+}
+
+QProgressBar {
+    background: palette(alternate-base);
+    color: palette(text);
+    border: none;
+    border-radius: 5px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background: palette(highlight);
+    border-radius: 5px;
+}
+
+/* --- Statusbalk ------------------------------------------------------- */
+
+QStatusBar {
+    background: palette(window);
+    color: palette(placeholder-text);
+}
+
+QStatusBar::item {
+    border: none;
+}

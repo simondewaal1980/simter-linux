@@ -33,6 +33,11 @@ Singleton {
     property string activeNodeState: ""
     property var activeNodeFlags: ReportParser.emptyFlags()
 
+    // Layout per desktop. Het report-formaat bevat alleen de layout van de
+    // gefocuste desktop per monitor; het instellingenvenster vraagt daarom
+    // bij het openen de volledige monitortree op.
+    property var desktopLayouts: ({})
+
     readonly property bool hasActiveNode: root.activeNodeState !== ""
     readonly property bool monocle: root.layout === "monocle"
 
@@ -51,11 +56,16 @@ Singleton {
         if (parsed.monitors.length === 0)
             return
 
+        const previousDesktop = root.focusedDesktop
+        const previousLayout = root.layout
         root.monitors = parsed.monitors
         root.desktops = parsed.desktops
         root.focusedMonitor = parsed.focusedMonitor
         root.focusedDesktop = parsed.focusedDesktop
         root.layout = parsed.layout
+        if (parsed.focusedDesktop !== previousDesktop
+                || parsed.layout !== previousLayout)
+            layoutRefreshTimer.restart()
         root.activeNodeState = parsed.activeNodeState
         root.activeNodeFlags = parsed.activeNodeFlags
         root.available = true
@@ -90,6 +100,41 @@ Singleton {
                 return root.monitors[i].layout
         }
         return root.layout
+    }
+
+    function layoutForDesktop(name) {
+        return root.desktopLayouts[name] || ""
+    }
+
+    // Vraagt de volledige tree van de gefocuste monitor op. Eén `bspc query`
+    // levert de layouts van alle desktops, zonder een abonnement per desktop.
+    function refreshDesktopLayouts() {
+        if (!root.available || root.focusedMonitor.length === 0)
+            return
+        if (layoutQueryProcess.running)
+            return
+        layoutQueryProcess.command = ["bspc", "query", "-T", "-m",
+            root.focusedMonitor]
+        layoutQueryProcess.running = true
+    }
+
+    function applyMonitorTree(text) {
+        var data = null
+        try {
+            data = JSON.parse(text)
+        } catch (error) {
+            return
+        }
+        if (!data || !data.desktops)
+            return
+
+        const map = {}
+        for (var i = 0; i < data.desktops.length; i++) {
+            const desktop = data.desktops[i]
+            if (desktop && typeof desktop.name === "string")
+                map[desktop.name] = desktop.layout
+        }
+        root.desktopLayouts = map
     }
 
     // --- Commando's -------------------------------------------------------
@@ -130,6 +175,51 @@ Singleton {
         if (!root.available)
             return
         root.runBspc(["bspc", "desktop", "-l", "next"])
+    }
+
+    function setDesktopLayout(desktopName, layout) {
+        if (!root.available || desktopName.length === 0)
+            return
+        root.runBspc(["bspc", "desktop", desktopName, "-l", layout])
+        layoutRefreshTimer.restart()
+    }
+
+    // --- Node-transformaties (tab Lay-outs) -------------------------------
+
+    function rotateNode(degrees) {
+        if (!root.available)
+            return
+        root.runBspc(["bspc", "node", "-R", String(degrees)])
+    }
+
+    function flipNode(dimension) {
+        if (!root.available)
+            return
+        root.runBspc(["bspc", "node", "-F", dimension])
+    }
+
+    function balanceNode() {
+        if (!root.available)
+            return
+        root.runBspc(["bspc", "node", "-B"])
+    }
+
+    function equalizeNode() {
+        if (!root.available)
+            return
+        root.runBspc(["bspc", "node", "-E"])
+    }
+
+    function circulateNode(direction) {
+        if (!root.available)
+            return
+        root.runBspc(["bspc", "node", "-C", direction])
+    }
+
+    function reloadWindowManager() {
+        if (!root.available)
+            return
+        root.runBspc(["bspc", "wm", "-r"])
     }
 
     // --- Processen --------------------------------------------------------
@@ -187,6 +277,24 @@ Singleton {
                 if (!subscribeProcess.running)
                     subscribeProcess.running = true
             }
+        }
+    }
+
+    // Kleine vertraging zodat bspc de layoutwijziging al heeft verwerkt.
+    Timer {
+        id: layoutRefreshTimer
+        interval: 150
+        repeat: false
+        running: false
+        onTriggered: root.refreshDesktopLayouts()
+    }
+
+    Process {
+        id: layoutQueryProcess
+
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.applyMonitorTree(text)
         }
     }
 

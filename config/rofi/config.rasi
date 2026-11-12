@@ -1,0 +1,95 @@
+/* config.rasi — rofi-thema dat de wallpaper-kleuren volgt (launcher en
+ * sessiemenu).
+ *
+ * Bron: ~/projecten/quickshell/config/rofi/config.rasi
+ * Gedeployed als symlink: ~/.config/rofi/config.rasi
+ *
+ * colors.rasi wordt door matugen gegenereerd uit de wallpaper
+ * (scripts/wallpaper-theme.sh) en definieert bg, bg-alt, bg-hover, fg,
+ * muted, accent, on-accent en red.
+ */
+
+@import "colors.rasi"
+
+* {
+    background-color: @bg;
+    text-color: @fg;
+    foreground: @fg;
+    normal-foreground: @fg;
+    alternate-normal-foreground: @fg;
+    normal-background: transparent;
+    alternate-normal-background: transparent;
+    active-foreground: @accent;
+    active-background: transparent;
+    alternate-active-background: transparent;
+    urgent-foreground: @red;
+    urgent-background: transparent;
+    alternate-urgent-background: transparent;
+    selected-normal-background: @accent;
+    selected-normal-foreground: @on-accent;
+    selected-active-background: @accent;
+    selected-active-foreground: @on-accent;
+    selected-urgent-background: @red;
+    selected-urgent-foreground: @on-accent;
+    lightbg: @bg-alt;
+    lightfg: @bg-hover;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    spacing: 0;
+}
+
+window {
+    width: 42%;
+    border: 2px;
+    border-color: @accent;
+    border-radius: 10px;
+    background-color: @bg;
+}
+
+mainbox {
+    padding: 12px;
+    spacing: 8px;
+}
+
+inputbar {
+    background-color: @bg-alt;
+    border-radius: 6px;
+    padding: 7px 10px;
+    spacing: 8px;
+}
+
+prompt {
+    text-color: @accent;
+}
+
+entry {
+    text-color: @fg;
+    placeholder-color: @muted;
+}
+
+listview {
+    lines: 9;
+    spacing: 2px;
+}
+
+element {
+    padding: 7px 10px;
+    border-radius: 6px;
+    text-color: @fg;
+}
+
+element selected {
+    background-color: @accent;
+    text-color: @on-accent;
+}
+
+element-text selected {
+    text-color: @on-accent;
+}
+
+scrollbar {
+    width: 4px;
+    handle-color: @bg-hover;
+    handle-width: 4px;
+}

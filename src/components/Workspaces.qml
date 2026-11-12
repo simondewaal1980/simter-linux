@@ -68,8 +68,8 @@ Row {
             readonly property bool isOccupied: modelData.occupied === true
             readonly property bool isUrgent: modelData.urgent === true
 
-            width: 24
-            height: 22
+            width: Theme.workspaceWidth
+            height: Theme.widgetHeight
             radius: Theme.radiusSmall
 
             color: {
@@ -116,8 +116,8 @@ Row {
         readonly property bool isMonocle: Bspwm.layoutForMonitor(root.monitorName) === "monocle"
 
         visible: Bspwm.available
-        width: 22
-        height: 22
+        width: Theme.workspaceWidth
+        height: Theme.widgetHeight
         radius: Theme.radiusSmall
         color: layoutHover.containsMouse ? Theme.surface0 : "transparent"
 

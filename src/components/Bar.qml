@@ -7,12 +7,120 @@
 import QtQuick
 import Quickshell
 import "../theme"
+import "../popups"
+import "../services"
 
 PanelWindow {
     id: bar
 
     // Van buitenaf te schakelen via de IPC-handler in shell.qml.
     property bool shown: true
+
+    // Het tandwiel, het toetsenbord, de wallpaperknop en de Snapper-popup
+    // vragen shell.qml om het betreffende FloatingWindow te openen (één
+    // venster voor alle schermen).
+    signal settingsRequested()
+    signal shortcutsRequested()
+    signal wallpaperRequested()
+    signal snapperCreateRequested()
+
+    // Via `qs ipc call weather open|close|toggle` (en de klik op de widget).
+    function openWeatherPopup() {
+        bar.closeNotificationCenter()
+        bar.closePowerMenu()
+        bar.closeSnapperPopup()
+        weatherPopup.visible = true
+    }
+
+    function closeWeatherPopup() {
+        weatherPopup.visible = false
+    }
+
+    function toggleWeatherPopup() {
+        if (weatherPopup.visible) {
+            weatherPopup.visible = false
+        } else {
+            bar.openWeatherPopup()
+        }
+    }
+
+    // Via `qs ipc call notifications open|close|toggle` en de bel in de bar.
+    function openNotificationCenter() {
+        bar.closeWeatherPopup()
+        bar.closePowerMenu()
+        bar.closeSnapperPopup()
+        tray.hideTooltip()
+        notificationCenter.visible = true
+    }
+
+    function closeNotificationCenter() {
+        notificationCenter.visible = false
+    }
+
+    function toggleNotificationCenter() {
+        if (notificationCenter.visible)
+            bar.closeNotificationCenter()
+        else
+            bar.openNotificationCenter()
+    }
+
+    // Via `qs ipc call power open|close|toggle` en de aan/uit-knop in de bar.
+    // PowerMenu.qml houdt deze spiegel bij; een directe binding aan
+    // powerMenu.visible zou bij het opbouwen van de bar te vroeg evalueren.
+    property bool powerMenuVisible: false
+
+    // Spiegel voor `qs ipc call snapper status`.
+    property bool snapperPopupVisible: false
+
+    function openPowerMenu() {
+        bar.closeWeatherPopup()
+        bar.closeNotificationCenter()
+        bar.closeSnapperPopup()
+        tray.hideTooltip()
+        powerMenu.visible = true
+    }
+
+    function closePowerMenu() {
+        powerMenu.visible = false
+    }
+
+    function togglePowerMenu() {
+        if (powerMenu.visible)
+            bar.closePowerMenu()
+        else
+            bar.openPowerMenu()
+    }
+
+    // Via `qs ipc call snapper open|close|toggle` en de Snapper-widget.
+    function openSnapperPopup() {
+        bar.closeWeatherPopup()
+        bar.closeNotificationCenter()
+        bar.closePowerMenu()
+        tray.hideTooltip()
+        Snapper.refresh()
+        snapperPopup.visible = true
+    }
+
+    function closeSnapperPopup() {
+        snapperPopup.visible = false
+    }
+
+    function toggleSnapperPopup() {
+        if (snapperPopup.visible)
+            bar.closeSnapperPopup()
+        else
+            bar.openSnapperPopup()
+    }
+
+    onShownChanged: {
+        if (!bar.shown) {
+            weatherPopup.visible = false
+            notificationCenter.visible = false
+            powerMenu.visible = false
+            snapperPopup.visible = false
+            tray.hideTooltip()
+        }
+    }
 
     anchors {
         top: true
@@ -26,10 +134,31 @@ PanelWindow {
     focusable: false
     visible: bar.shown
 
+    // Het venster zelf moet transparant zijn; anders blijft de standaard witte
+    // vensterachtergrond achter de semi-transparante Rectangle zichtbaar.
+    // surfaceFormat.opaque moet vóór het eerste zichtbaar maken op false staan,
+    // omdat een ondoorzichtige surface later niet meer transparant kan worden.
+    color: "transparent"
+    surfaceFormat.opaque: false
+
     Rectangle {
         id: background
         anchors.fill: parent
-        color: Theme.barBackground
+        color: Theme.barBackgroundTransparent
+
+        // Een klik op een leeg stuk van de bar sluit de weerpopup en de
+        // traytooltip. Kinderen met een eigen MouseArea (workspaces, widgets)
+        // liggen hierboven en houden hun eigen klikgedrag.
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                bar.closeWeatherPopup()
+                bar.closeNotificationCenter()
+                bar.closePowerMenu()
+                bar.closeSnapperPopup()
+                tray.hideTooltip()
+            }
+        }
 
         // Subtiele rand onder de bar, in dezelfde kleur als normale
         // BSPWM-vensterranden.
@@ -59,16 +188,15 @@ PanelWindow {
             anchors.centerIn: parent
         }
 
-        // Rechts: venstertitel en tijdelijke iconen. Volume, netwerk en accu
-        // krijgen in latere fasen een echte widget (tray in fase 5,
-        // volume/accu in fase 9).
+        // Rechts: venstertitel, weer, muziek, volume, accu, meldingen,
+        // sneltoetsen, instellingen en tray. Netwerk loopt via de tray.
         Row {
             anchors {
                 right: parent.right
                 rightMargin: Theme.barPadding
                 verticalCenter: parent.verticalCenter
             }
-            spacing: 14
+            spacing: Theme.barSpacing
 
             ActiveWindow {
                 id: activeWindow
@@ -80,36 +208,238 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: activeWindow.visible
                 width: 1
-                height: 14
+                height: Theme.separatorHeight
                 color: Theme.surface1
             }
 
-            Text {
+            WeatherWidget {
+                id: weatherWidget
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf028" // volume-high
-                color: Theme.barMuted
-                font.family: Theme.iconFamily
-                font.pixelSize: Theme.iconSize
-                opacity: 0.55
+                onClicked: bar.toggleWeatherPopup()
             }
 
-            Text {
+            // Snapper: aantal momentopnamen; klik opent de lijst.
+            SnapperWidget {
+                id: snapperWidget
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf1eb" // wifi
-                color: Theme.barMuted
-                font.family: Theme.iconFamily
-                font.pixelSize: Theme.iconSize
-                opacity: 0.55
+                onClicked: bar.toggleSnapperPopup()
             }
 
-            Text {
+            // Muziek (alleen als er een MPRIS-speler met een nummer is).
+            MprisWidget {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "\uf240" // battery-full
-                color: Theme.barMuted
-                font.family: Theme.iconFamily
-                font.pixelSize: Theme.iconSize
-                opacity: 0.55
             }
+
+            // Volume: Pipewire, met pactl-terugval op PulseAudio.
+            VolumeWidget {
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            // Accu: alleen zichtbaar als UPower een accu meldt.
+            BatteryWidget {
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            // Bel + DND-schakelaar + badge (altijd zichtbaar).
+            NotificationBell {
+                id: notificationBell
+                anchors.verticalCenter: parent.verticalCenter
+                onCenterRequested: bar.toggleNotificationCenter()
+                onDndToggled: Notifications.toggleDnd()
+            }
+
+            // Toetsenbord: opent het sneltoetsenoverzicht (Super+/).
+            Item {
+                id: shortcutsButton
+
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.iconButtonSize
+                height: Theme.iconButtonSize
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusSmall
+                    color: shortcutsHover.containsMouse ? Theme.surface0 : "transparent"
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\uf11c" // keyboard
+                    color: shortcutsHover.containsMouse ? Theme.text : Theme.barMuted
+                    font.family: Theme.iconFamily
+                    font.pixelSize: Theme.iconSize
+                }
+
+                MouseArea {
+                    id: shortcutsHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: bar.shortcutsRequested()
+                }
+            }
+
+            // Afbeelding: opent het wallpapervenster (kiezen, previewen,
+            // toevoegen en verwijderen).
+            Item {
+                id: wallpaperButton
+
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.iconButtonSize
+                height: Theme.iconButtonSize
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusSmall
+                    color: wallpaperHover.containsMouse ? Theme.surface0 : "transparent"
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\uf03e" // image
+                    color: wallpaperHover.containsMouse ? Theme.text : Theme.barMuted
+                    font.family: Theme.iconFamily
+                    font.pixelSize: Theme.iconSize
+                }
+
+                MouseArea {
+                    id: wallpaperHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: bar.wallpaperRequested()
+                }
+            }
+
+            // Tandwiel: opent het BSPWM-instellingenvenster.
+            Item {
+                id: settingsButton
+
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.iconButtonSize
+                height: Theme.iconButtonSize
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusSmall
+                    color: settingsHover.containsMouse ? Theme.surface0 : "transparent"
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\uf013" // gear
+                    color: settingsHover.containsMouse ? Theme.text : Theme.barMuted
+                    font.family: Theme.iconFamily
+                    font.pixelSize: Theme.iconSize
+                }
+
+                MouseArea {
+                    id: settingsHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: bar.settingsRequested()
+                }
+            }
+
+            // Alleen zichtbaar als er echt tray-items zijn (anders geen
+            // scheidingslijn of lege ruimte).
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: tray.hasItems
+                width: 1
+                height: Theme.separatorHeight
+                color: Theme.surface1
+            }
+
+            TrayWidget {
+                id: tray
+                barWindow: bar
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            // Aan/uit-knop: opent het sessiemenu (afmelden, vergrendelen,
+            // slapen en afsluiten).
+            Item {
+                id: powerButton
+
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.iconButtonSize
+                height: Theme.iconButtonSize
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusSmall
+                    color: powerHover.containsMouse || bar.powerMenuVisible
+                        ? Theme.surface0 : "transparent"
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\uf011" // power-off
+                    color: {
+                        if (bar.powerMenuVisible)
+                            return Theme.red
+                        if (powerHover.containsMouse)
+                            return Theme.text
+                        return Theme.barMuted
+                    }
+                    font.family: Theme.iconFamily
+                    font.pixelSize: Theme.iconSize
+                }
+
+                MouseArea {
+                    id: powerHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: bar.togglePowerMenu()
+                }
+            }
+
+        }
+    }
+
+    // Weerpopup, onder de bar en rechts uitgelijnd met de barrand.
+    WeatherPopup {
+        id: weatherPopup
+        anchor.window: bar
+        anchor.edges: Edges.Top | Edges.Right
+        anchor.gravity: Edges.Bottom | Edges.Left
+        anchor.adjustment: PopupAdjustment.None
+        anchor.rect.x: bar.width - Theme.barPadding
+        anchor.rect.y: bar.height + Theme.scaled(4)
+    }
+
+    // Notificatiepopups: rechtsboven onder de bar, maximaal vier kaarten.
+    NotificationStack {
+        id: notificationStack
+        barWindow: bar
+        centerOpen: notificationCenter.visible
+        barShown: bar.shown
+        screenX: bar.screen ? bar.screen.x : 0
+        screenY: bar.screen ? bar.screen.y : 0
+    }
+
+    // Notificatiecentrum: geschiedenis, wis alles en per-item acties.
+    NotificationCenter {
+        id: notificationCenter
+        barWindow: bar
+    }
+
+    // Sessiemenu: afmelden, vergrendelen, slapen en afsluiten.
+    PowerMenu {
+        id: powerMenu
+        barWindow: bar
+    }
+
+    // Momentopnamen: configuratiekeuze, aanmaken en verwijderen.
+    SnapperPopup {
+        id: snapperPopup
+        barWindow: bar
+        onCreateRequested: {
+            bar.closeSnapperPopup()
+            bar.snapperCreateRequested()
         }
     }
 }

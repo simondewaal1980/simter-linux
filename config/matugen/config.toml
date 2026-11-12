@@ -1,0 +1,64 @@
+# config.toml — matugen-instellingen voor de wallpaper-thema-pijplijn.
+#
+# Bron: ~/projecten/quickshell/config/matugen/config.toml
+# Aangeroepen door scripts/wallpaper-theme.sh met:
+#   matugen image <wallpaper> -m dark -c <dit bestand>
+#
+# De invoertemplates staan in ./templates; de uitvoer gaat naar de
+# gebruikersconfiguratie (geen symlinks nodig). De post_hook van het
+# Quickshell-template werkt de BSPWM-kleuren bij en past ze direct toe.
+
+[config]
+version_check = false
+# Kies bij meerdere bronkleuren de meest verzadigde; wallpaper-gradients
+# leveren vaak een paar kandidaten op en de terminal is niet interactief.
+prefer = "saturation"
+caching = false
+
+# Matugen zet zelf de wallpaper (feh), zodat wallpaper en palet nooit uit
+# elkaar lopen. Dezelfde wallpaper wordt ook door wallpaper-theme.sh gezet.
+[config.wallpaper]
+set = true
+command = "feh --bg-fill {{ image }}"
+
+# Aanvullende term/paneelkleuren. Matugen harmoniseert ze met de bronkleur,
+# zodat groen/geel/rood bij de wallpaper passen maar herkenbaar blijven.
+# (De base16-uitvoer van matugen is bij deze donkere gradient onbruikbaar:
+# alle accenten komen daar bijna zwart uit.)
+[config.custom_colors]
+term_red = "#f38ba8"
+term_peach = "#fab387"
+term_yellow = "#f9e2af"
+term_green = "#a6e3a1"
+term_teal = "#94e2d5"
+term_sky = "#89dceb"
+term_blue = "#89b4fa"
+term_mauve = "#cba6f7"
+term_pink = "#f5c2e7"
+
+# --- Quickshell + BSPWM ---------------------------------------------------
+# Eén paletbestand voor de shell; de hook erachter werkt settings.json bij.
+[templates.quickshell]
+input_path = "templates/quickshell-theme.json"
+output_path = "~/.config/bspwm/theme.generated.json"
+index = 10
+post_hook = "$HOME/projecten/quickshell/scripts/apply-wallpaper-theme.sh"
+
+# --- GTK (apps) -----------------------------------------------------------
+[templates.gtk3]
+input_path = "templates/gtk3.css"
+output_path = "~/.config/gtk-3.0/gtk.css"
+
+[templates.gtk4]
+input_path = "templates/gtk4.css"
+output_path = "~/.config/gtk-4.0/gtk.css"
+
+# --- Alacritty ------------------------------------------------------------
+[templates.alacritty]
+input_path = "templates/alacritty.toml"
+output_path = "~/.config/alacritty/colors.toml"
+
+# --- Rofi -----------------------------------------------------------------
+[templates.rofi]
+input_path = "templates/rofi.rasi"
+output_path = "~/.config/rofi/colors.rasi"

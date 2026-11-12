@@ -11,6 +11,36 @@
 CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/bspwm
 QUICKSHELL_DIR=$HOME/projecten/quickshell
 
+# User-local binaries (zoals matugen). Zonder deze regel zou een
+# loginomgeving die ~/.local/bin niet in PATH heeft ze niet vinden.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
+# --- Qt-thema (qt6ct) -----------------------------------------------------
+# Qt-apps gebruiken hetzelfde wallpaper-palet, dezelfde JetBrains Mono en
+# dezelfde 6px-hoeken als de Quickshell-widgets. apply-qt-theme.sh schrijft
+# ~/.config/qt6ct/qt6ct.conf en het kleurenpalet; deze variabele activeert de
+# qt6ct-platformplugin. Zonder qt6ct valt Qt terug op het donkere GTK-thema.
+QT6CT_PREFIX="$HOME/.local/opt/qt6ct"
+if [ -d "$QT6CT_PREFIX/plugins" ]; then
+  # User-local installatie (scripts/install-qt6ct-user.sh): de plugin en de
+  # gedeelde bibliotheek staan buiten de standaardpaden van Qt en de loader.
+  export QT_PLUGIN_PATH="$QT6CT_PREFIX/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+  export LD_LIBRARY_PATH="$QT6CT_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  case ":$PATH:" in
+    *":$QT6CT_PREFIX/bin:"*) ;;
+    *) PATH="$QT6CT_PREFIX/bin:$PATH" ;;
+  esac
+fi
+if command -v qt6ct >/dev/null 2>&1 \
+    || [ -r "$QT6CT_PREFIX/plugins/platformthemes/libqt6ct.so" ]; then
+  export QT_QPA_PLATFORMTHEME=qt6ct
+else
+  export QT_QPA_PLATFORMTHEME=${QT_QPA_PLATFORMTHEME:-gtk3}
+fi
+
 # --- Hulptools ------------------------------------------------------------
 # Start een programma alleen als het nog niet op dít scherm draait. Zo
 # overleeft een herstart (bspc wm -r) geen dubbele instanties en negeren we
@@ -44,6 +74,17 @@ spawn_once() {
   "$@" >/dev/null 2>&1 &
 }
 
+# Voor processen met een naam langer dan 15 tekens: /proc/PID/comm is dan
+# afgekapt en `pgrep -x` vindt niets. Zoek op de volledige command line.
+spawn_once_pattern() {
+  name=$1
+  shift
+  if running_pattern "$name"; then
+    return 0
+  fi
+  "$@" >/dev/null 2>&1 &
+}
+
 # --- Desktops en basisgedrag ----------------------------------------------
 
 bspc monitor -d 1 2 3 4 5 6 7 8 9
@@ -65,18 +106,59 @@ fi
 
 # --- Vensterregels --------------------------------------------------------
 
-# Quickshell-vensters (instellingen, sneltoetsen, popups) zweven gecentreerd.
+# Quickshell-vensters (instellingen, sneltoetsen, wallpapers, popups) zweven
+# gecentreerd. Quickshell 0.3.2 zet onder X11 geen WM_CLASS op een
+# FloatingWindow; de klasse-regels hieronder vangen oudere builds, de
+# titelregels zijn wat in deze sessie daadwerkelijk matcht
+# (class:instance:window_name).
 bspc rule -a quickshell-bspwm state=floating center=on
 bspc rule -a Quickshell state=floating center=on
+bspc rule -a '*:*:BSPWM-instellingen' state=floating center=on
+bspc rule -a '*:*:Sneltoetsen' state=floating center=on
+bspc rule -a '*:*:Wallpapers' state=floating center=on
+bspc rule -a '*:*:Nieuwe momentopname' state=floating center=on
 
 # --- Sessieprocessen ------------------------------------------------------
 
 # Sneltoetsen
 spawn_once sxhkd sxhkd
 
-# Wallpaper (feh zet de achtergrond en stopt daarna; dat is normaal)
-if [ -r "$HOME/Pictures/wallpaper.jpg" ]; then
+# Polkit-agent. Quickshell levert er geen; LXQt is als fallback geïnstalleerd
+# en levert lxqt-policykit-agent. Die heeft de voorkeur: hij gebruikt
+# libpolkit-qt6 en werkt met de polkit-versie van deze machine. lxpolkit (GTK)
+# en polkit-gnome zijn alternatieven. De agent moet in deze sessie draaien,
+# anders kan pkexec niet om een wachtwoord vragen; daarom start bspwmrc hem
+# één keer per sessie.
+if command -v lxqt-policykit-agent >/dev/null 2>&1; then
+  spawn_once_pattern lxqt-policykit-agent lxqt-policykit-agent
+elif command -v lxpolkit >/dev/null 2>&1; then
+  spawn_once lxpolkit lxpolkit
+elif command -v polkit-gnome-authentication-agent-1 >/dev/null 2>&1; then
+  spawn_once polkit-gnome-authentication-agent-1 polkit-gnome-authentication-agent-1
+fi
+
+# --- Wallpaper en kleuren ------------------------------------------------
+# Eén script zet de wallpaper (feh) en genereert met matugen een donker palet
+# voor Quickshell, BSPWM-randen, GTK 3/4, Qt 6 (qt6ct), alacritty en rofi.
+# Zonder matugen valt de sessie terug op Variety of een vaste wallpaper via feh.
+THEME_SCRIPT="$QUICKSHELL_DIR/scripts/wallpaper-theme.sh"
+if [ -x "$THEME_SCRIPT" ] && { command -v matugen >/dev/null 2>&1 \
+    || [ -x "$HOME/.local/bin/matugen" ]; }; then
+  "$THEME_SCRIPT" --quiet >/dev/null 2>&1 || echo "bspwmrc: wallpaper-theme.sh kon het thema niet toepassen" >&2
+elif command -v variety >/dev/null 2>&1; then
+  if ! running_pattern "/usr/bin/variety"; then
+    variety >/dev/null 2>&1 &
+  fi
+elif [ -r "$HOME/Pictures/wallpaper.jpg" ]; then
   feh --bg-fill "$HOME/Pictures/wallpaper.jpg" >/dev/null 2>&1
+fi
+
+# Het Qt-palet opnieuw schrijven, ook als matugen ontbreekt of de post-hook
+# niet liep. Zo hebben Qt-apps na elke login meteen het juiste thema.
+QT_THEME_SCRIPT="$QUICKSHELL_DIR/scripts/apply-qt-theme.sh"
+if [ -x "$QT_THEME_SCRIPT" ]; then
+  "$QT_THEME_SCRIPT" >/dev/null 2>&1 \
+    || echo "bspwmrc: apply-qt-theme.sh kon het Qt-thema niet schrijven" >&2
 fi
 
 # Compositor (schaduwen/transparantie); optioneel, mag ontbreken.
@@ -85,8 +167,28 @@ if [ -r "$HOME/.config/picom/picom.conf" ] && command -v picom >/dev/null 2>&1; 
 fi
 
 # Quickshell (bar, notificaties, tray). Vanaf fase 2 staat hier shell.qml.
+# Quickshell is ook de enige notificatiedaemon (org.freedesktop.Notifications);
+# start hier geen lxqt-notificationd of dunst, want dat geeft een D-Bus-conflict.
 if command -v qs >/dev/null 2>&1 && [ -f "$QUICKSHELL_DIR/shell.qml" ]; then
   if ! running_pattern "qs -p $QUICKSHELL_DIR"; then
     qs -p "$QUICKSHELL_DIR" >"/tmp/quickshell-$USER.log" 2>&1 &
+  fi
+
+  # Optionele watchdog: alleen als QUICKSHELL_WATCHDOG=1 in de sessie staat.
+  # Herstart Quickshell als het proces onverwacht verdwijnt. Standaard uit,
+  # zodat een crash niet eindeloos wordt gemaskeerd.
+  WATCHDOG_PID="/tmp/quickshell-watchdog-$USER.pid"
+  if [ "${QUICKSHELL_WATCHDOG:-0}" = "1" ] \
+      && { [ ! -r "$WATCHDOG_PID" ] \
+           || ! kill -0 "$(cat "$WATCHDOG_PID" 2>/dev/null)" 2>/dev/null; }; then
+    (
+      echo $$ >"$WATCHDOG_PID"
+      while true; do
+        sleep 5
+        if ! running_pattern "qs -p $QUICKSHELL_DIR"; then
+          qs -p "$QUICKSHELL_DIR" >"/tmp/quickshell-$USER.log" 2>&1 &
+        fi
+      done
+    ) &
   fi
 fi

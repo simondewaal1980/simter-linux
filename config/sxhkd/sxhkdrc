@@ -10,20 +10,35 @@
 #   - een comment direct boven een hotkey is de omschrijving
 #   - "# --- Sectie ---" begint een groep
 #   - ingesprongen regels onder een hotkey zijn het commando
+#
+# Het overzicht in Quickshell (Super+/) leest dit bestand rechtstreeks; pas
+# hier iets aan en herlaad sxhkd, dan werkt het overzicht direct bij.
 
-# --- Applicaties ---
+# --- Algemeen ---
 
-# Terminal
+# Terminal openen
 super + Return
 	alacritty
 
-# Applicatielauncher
+# Applicatielauncher openen
 super + d
 	rofi -show drun
 
-# Bestandsbeheer
+# Webbrowser openen
+super + shift + b
+	firefox
+
+# Bestandsbeheer openen
 super + shift + f
 	pcmanfm-qt
+
+# Volgende wallpaper (past ook het kleurenpalet aan)
+super + w
+	$HOME/projecten/quickshell/scripts/wallpaper-theme.sh next
+
+# Wallpapervenster: kiezen, previewen, toevoegen en verwijderen
+super + shift + w
+	qs -p "$HOME/projecten/quickshell" ipc call wallpaper toggle
 
 # --- Vensters ---
 
@@ -45,19 +60,19 @@ super + shift + q
 
 # Fullscreen aan/uit
 super + f
-	bspc node -t fullscreen
-
-# Venster zwevend maken
-super + s
-	bspc node -t floating
+	bspc node -t ~fullscreen
 
 # Venster weer betegelen
 super + t
 	bspc node -t tiled
 
+# Venster zwevend maken
+super + s
+	bspc node -t floating
+
 # --- Workspaces ---
 
-# Desktop 1-9
+# Desktop 1-9 focussen
 super + {1-9}
 	bspc desktop -f '^{1-9}'
 
@@ -71,11 +86,115 @@ super + Tab
 
 # --- Layout ---
 
-# Monocle/tiled wisselen
+# Monocle-layout op de gefocuste desktop
 super + m
+	bspc desktop -l monocle
+
+# Volgende layout (tiled/monocle) op de gefocuste desktop
+super + shift + t
 	bspc desktop -l next
 
+# Boom 90 graden roteren
+super + shift + r
+	bspc node -R 90
+
+# Boom balanceren
+super + shift + space
+	bspc node -B
+
+# Bomen gelijkmatig verdelen
+super + shift + e
+	bspc node -E
+
+# --- Preselect ---
+
+# Preselectie aanmaken aan links/onder/boven/rechts
+super + ctrl + {h,j,k,l}
+	bspc node -p {west,south,north,east}
+
+# Preselectie annuleren
+super + Escape
+	bspc node -p cancel
+
+# --- Quickshell ---
+
+# BSPWM-instellingen openen/sluiten
+super + shift + s
+	qs -p "$HOME/projecten/quickshell" ipc call settings toggle
+
+# Sneltoetsenoverzicht openen/sluiten
+super + slash
+	qs -p "$HOME/projecten/quickshell" ipc call shortcuts toggle
+
+# Notificatiecentrum openen/sluiten
+super + shift + n
+	qs -p "$HOME/projecten/quickshell" ipc call notifications toggle
+
+# Niet storen aan/uit
+super + shift + d
+	qs -p "$HOME/projecten/quickshell" ipc call notifications toggleDnd
+
+# --- Media ---
+
+# Volume harder
+XF86AudioRaiseVolume
+	pactl set-sink-volume @DEFAULT_SINK@ +5%
+
+# Volume zachter
+XF86AudioLowerVolume
+	pactl set-sink-volume @DEFAULT_SINK@ -5%
+
+# Geluid dempen/aanzetten
+XF86AudioMute
+	pactl set-sink-mute @DEFAULT_SINK@ toggle
+
+# Microfoon dempen/aanzetten
+XF86AudioMicMute
+	pactl set-source-mute @DEFAULT_SOURCE@ toggle
+
+# Scherm helderder
+XF86MonBrightnessUp
+	brightnessctl set +5%
+
+# Scherm dimmen
+XF86MonBrightnessDown
+	brightnessctl set 5%-
+
+# Muziek afspelen/pauzeren
+XF86AudioPlay
+	playerctl play-pause
+
+# Volgende track
+XF86AudioNext
+	playerctl next
+
+# Vorige track
+XF86AudioPrev
+	playerctl previous
+
+# Muziek stoppen
+XF86AudioStop
+	playerctl stop
+
+# --- Screenshots ---
+
+# Volledig scherm naar ~/Pictures/screenshots
+Print
+	sh -c 'mkdir -p "$HOME/Pictures/screenshots" && maim -u "$HOME/Pictures/screenshots/$(date +%Y-%m-%d_%H-%M-%S).png"'
+
+# Regio selecteren en opslaan
+shift + Print
+	sh -c 'mkdir -p "$HOME/Pictures/screenshots" && maim -s -u "$HOME/Pictures/screenshots/$(date +%Y-%m-%d_%H-%M-%S).png"'
+
+# Actief venster opslaan
+super + Print
+	sh -c 'mkdir -p "$HOME/Pictures/screenshots" && maim -i "$(xdotool getactivewindow)" -u "$HOME/Pictures/screenshots/$(date +%Y-%m-%d_%H-%M-%S).png"'
+
 # --- Sessie ---
+
+# Sessie vergrendelen
+super + alt + l
+	"$HOME/projecten/quickshell/scripts/lock-session.sh"
 
 # BSPWM herstarten (settings.json wordt opnieuw toegepast)
 super + ctrl + r
@@ -84,3 +203,18 @@ super + ctrl + r
 # Sxhkd herladen
 super + ctrl + s
 	pkill -USR1 sxhkd
+
+# BSPWM afsluiten (terug naar de display manager)
+super + alt + e
+	bspc quit
+
+# Sessiemenu in de bar (afmelden, vergrendelen, slapen en afsluiten;
+# valt terug op rofi als Quickshell niet draait)
+super + shift + p
+	"$HOME/projecten/quickshell/scripts/powermenu.sh"
+
+# @qs-shortcut {"id":"qs-mwdmvs9o-jrrl","group":"Eigen sneltoetsen"}
+# Chrome
+super + g
+	google-chrome
+# @qs-shortcut-end qs-mwdmvs9o-jrrl

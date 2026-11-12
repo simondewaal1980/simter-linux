@@ -33,7 +33,7 @@ Item {
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: 1
-            implicitHeight: 14
+            implicitHeight: Theme.separatorHeight
             color: Theme.surface1
         }
 

@@ -31,5 +31,9 @@
     "borderless_singleton": false,
     "borderless_monocle": false,
     "gapless_monocle": false
+  },
+  "ui": {
+    "scale": 1.0,
+    "bar_opacity": 0.8
   }
 }

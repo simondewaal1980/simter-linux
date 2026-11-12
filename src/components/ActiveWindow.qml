@@ -17,7 +17,7 @@ Item {
     id: root
 
     property string title: ""
-    property int maxWidth: 340
+    property int maxWidth: Theme.scaled(340)
 
     visible: root.title.length > 0
     implicitWidth: content.implicitWidth
@@ -45,7 +45,7 @@ Item {
     Row {
         id: content
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 6
+        spacing: Theme.scaled(6)
 
         Text {
             anchors.verticalCenter: parent.verticalCenter

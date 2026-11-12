@@ -1,0 +1,35 @@
+{
+  "generated": true,
+  "mode": "dark",
+  "source": "{{ colors.source_color.default.hex }}",
+  "wallpaper": "{{ image }}",
+  "palette": {
+    "base": "{{ colors.surface_container.default.hex }}",
+    "mantle": "{{ colors.surface_container_low.default.hex }}",
+    "crust": "{{ colors.surface_container_lowest.default.hex }}",
+    "surface0": "{{ colors.surface_container_high.default.hex }}",
+    "surface1": "{{ colors.surface_container_highest.default.hex }}",
+    "surface2": "{{ colors.surface_bright.default.hex }}",
+    "overlay0": "{{ colors.outline_variant.default.hex }}",
+    "overlay1": "{{ colors.outline.default.hex }}",
+    "subtext0": "{{ colors.on_surface_variant.default.hex }}",
+    "subtext1": "{{ colors.on_surface.default.hex }}",
+    "text": "{{ colors.on_surface.default.hex }}",
+    "blue": "{{ colors.primary.default.hex }}",
+    "lavender": "{{ colors.secondary.default.hex }}",
+    "mauve": "{{ colors.term_mauve.default.hex }}",
+    "pink": "{{ colors.term_pink.default.hex }}",
+    "red": "{{ colors.error.default.hex }}",
+    "peach": "{{ colors.term_peach.default.hex }}",
+    "yellow": "{{ colors.term_yellow.default.hex }}",
+    "green": "{{ colors.term_green.default.hex }}",
+    "teal": "{{ colors.term_teal.default.hex }}",
+    "sky": "{{ colors.term_sky.default.hex }}"
+  },
+  "bspwm": {
+    "focused": "{{ colors.primary.default.hex }}",
+    "active": "{{ colors.outline.default.hex }}",
+    "normal": "{{ colors.surface_container_high.default.hex }}",
+    "presel_feedback": "{{ colors.tertiary.default.hex }}"
+  }
+}
