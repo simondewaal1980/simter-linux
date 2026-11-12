@@ -1,0 +1,66 @@
+#!/bin/sh
+# quickshell-user-setup — legt de Quickshell-desktop vast in een gebruikersmap.
+#
+# Dit script is idempotent en draait bij elke BSPWM-login (aangeroepen door
+# bspwmrc) en eenmalig na de Calamares-installatie. Het maakt symlinks naar
+# /opt/quickshell, kopieert de standaardwallpaper en de meegeleverde
+# wallpapers, en schrijft ontbrekende gebruikersbestanden. Bestaande
+# gebruikersbestanden worden nooit overschreven.
+
+set -eu
+
+REPO=${QUICKSHELL_DIR:-/opt/quickshell}
+[ -d "$REPO" ] || exit 0
+
+CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
+mkdir -p "$CONFIG"/bspwm "$CONFIG"/sxhkd "$CONFIG"/picom "$CONFIG"/rofi \
+         "$CONFIG"/alacritty "$CONFIG"/qt6ct/qss "$HOME"/Pictures/Wallpapers \
+         "$HOME"/projecten
+
+link() {
+    src=$1
+    dst=$2
+    if [ -e "$dst" ] || [ -L "$dst" ]; then
+        return 0
+    fi
+    mkdir -p "$(dirname "$dst")"
+    ln -s "$src" "$dst"
+}
+
+link "$REPO/config/bspwm/bspwmrc"                    "$CONFIG/bspwm/bspwmrc"
+link "$REPO/scripts/apply-bspwm-settings.sh"         "$CONFIG/bspwm/apply-settings.sh"
+link "$REPO/config/bspwm/settings.default.json"      "$CONFIG/bspwm/settings.default.json"
+link "$REPO/config/sxhkd/sxhkdrc"                    "$CONFIG/sxhkd/sxhkdrc"
+link "$REPO/config/picom/picom.conf"                 "$CONFIG/picom/picom.conf"
+link "$REPO/config/rofi/config.rasi"                 "$CONFIG/rofi/config.rasi"
+link "$REPO/config/alacritty/alacritty.toml"         "$CONFIG/alacritty/alacritty.toml"
+link "$REPO/config/qt6ct/qss/quickshell.qss"         "$CONFIG/qt6ct/qss/quickshell.qss"
+
+# De sxhkdrc, matugen-post-hook en enkele QML-services gebruiken deze vaste
+# projectpad. Op de ISO staat het project systeembreed in /opt/quickshell.
+link "$REPO" "$HOME/projecten/quickshell"
+
+# Het gebruikersbestand is een kopie; Quickshell schrijft hierin.
+[ -e "$CONFIG/bspwm/settings.json" ] || \
+    cp "$REPO/config/bspwm/settings.default.json" "$CONFIG/bspwm/settings.json"
+
+# Wallpaper: standaard + de meegeleverde Griekse selectie.
+if [ ! -e "$HOME/Pictures/wallpaper.jpg" ] && \
+   [ -r /usr/share/backgrounds/quickshell/wallpaper.jpg ]; then
+    cp /usr/share/backgrounds/quickshell/wallpaper.jpg \
+       "$HOME/Pictures/wallpaper.jpg"
+fi
+if [ -d /usr/share/backgrounds/quickshell/Wallpapers ]; then
+    for src in /usr/share/backgrounds/quickshell/Wallpapers/*; do
+        [ -r "$src" ] || continue
+        dst=$HOME/Pictures/Wallpapers/${src##*/}
+        [ -e "$dst" ] || cp "$src" "$dst"
+    done
+fi
+
+# Qt-palet: zonder gegenereerd thema gebruikt het script Catppuccin Mocha.
+if [ -x "$REPO/scripts/apply-qt-theme.sh" ]; then
+    "$REPO/scripts/apply-qt-theme.sh" >/dev/null 2>&1 || true
+fi
+
+exit 0

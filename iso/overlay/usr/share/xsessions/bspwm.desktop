@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=bspwm
+Comment=BSPWM met de Quickshell-bar
+Exec=/usr/local/bin/quickshell-session
+Type=Application
+DesktopNames=bspwm

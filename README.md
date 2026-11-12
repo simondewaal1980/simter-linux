@@ -27,6 +27,34 @@ gekopieerd bij het starten.
 | **Wallpapers** | Venster met previews: toepassen, volgende, toevoegen via ingebouwde bestandsbrowser en verwijderen; downloadscript voor tien Griekse wallpapers |
 | **Thema** | Donker (Adwaita-dark + Papirus-Dark) met een Material You-palet uit de wallpaper voor bar, bspwm-randen, GTK 3/4, Qt 6 (qt6ct), alacritty en rofi |
 
+## Installatie-ISO (Calamares)
+
+Naast handmatige installatie is er een reproduceerbare installatie-ISO:
+
+```bash
+sudo iso/build.sh
+```
+
+De ISO komt in `iso/out/quickshell-desktop-amd64.iso` (met `.sha256`). Hij
+boot op BIOS en UEFI in een LXQt-live-sessie en start Calamares automatisch.
+De installer schrijft dezelfde BTRFS-indeling als de bronmachine:
+
+| Onderdeel | Waarde |
+|---|---|
+| EFI | GPT, 1 GiB FAT32 op `/boot/efi`, `umask=0077` |
+| Root | één BTRFS-partitie, subvolume `@rootfs` |
+| Mountopties | `noatime,compress=zlib:3,discard=async,space_cache=v2` |
+| Snapshots | snapper-configuratie `root`, geneste `/.snapshots`, 50 nummer- en 10 tijdlijnmomentopnamen |
+| Swap | geen (zoals op de bronmachine) |
+| Bootloader | GRUB met `rootflags=subvol=@rootfs` |
+
+Het project staat in het geïnstalleerde systeem in `/opt/quickshell`; de
+gebruiker krijgt `~/projecten/quickshell` als symlink, zodat de bestaande
+paden in `sxhkdrc`, Quickshell en de matugen-post-hook blijven werken.
+Persoonlijke bestanden en Google Chrome gaan niet mee; matugen en de
+meegeleverde wallpapers wel. Zie `iso/README.md` voor de builddetails en
+`PLAN.md` (aanvullende fase) voor de ontwerpkeuzes.
+
 ## Vereisten
 
 Getest op Debian sid (forky) met X11, SDDM, 1920×1080, bspwm 0.9.12,
@@ -90,6 +118,13 @@ De repo staat in dit project op `/home/simon/projecten/quickshell`. Kies je een
 ander pad, vervang dan dat pad in de symlinks, in `config/sxhkd/sxhkdrc`
 (de `qs -p …`-regels) en in de `post_hook` van
 `config/matugen/config.toml`.
+
+Op de installer-ISO staat het project in `/opt/quickshell`. De sessiewrapper
+`/usr/local/bin/quickshell-session` draait bij de eerste login
+`/usr/local/bin/quickshell-user-setup`; dat script maakt de symlinks, kopieert
+de wallpaper en legt `~/projecten/quickshell` als symlink naar
+`/opt/quickshell` aan. `bspwmrc` gebruikt `$QUICKSHELL_DIR` en valt terug op
+`/opt/quickshell` als het project niet in de homemap staat.
 
 ### 2. Symlinks naar de configuratie
 

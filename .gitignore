@@ -6,3 +6,10 @@ qmlls.ini
 *.log
 *.swp
 *~
+
+# Installer-ISO: buildmap en uitvoer
+iso/build/
+iso/cache/
+iso/out/
+iso/test/
+iso/build.log

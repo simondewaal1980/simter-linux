@@ -1,0 +1,23 @@
+#!/bin/sh
+# Verwijder NVIDIA-driverpakketten en LightDM die via desktop-recommendations
+# in de live-omgeving belanden. De bronmachine gebruikt Mesa en SDDM; op een
+# VM zonder NVIDIA-GPU kan een NVIDIA-GLX-alternative de X11/Quickshell-start
+# breken, en LightDM zou de live-autologin van live-config (SDDM) omzeilen.
+set -e
+
+pkgs=$(dpkg-query -W -f='${Package}\n' 2>/dev/null \
+    | grep -E 'nvidia|^lightdm' | sort -u || true)
+if [ -n "$pkgs" ]; then
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y $pkgs || true
+fi
+
+# Laat de GLX-alternative weer automatisch naar Mesa wijzen.
+update-alternatives --auto glx >/dev/null 2>&1 || true
+
+# SDDM blijft de displaymanager na het opruimen.
+if command -v sddm >/dev/null 2>&1; then
+    printf '/usr/bin/sddm\n' >/etc/X11/default-display-manager
+    ln -sf /lib/systemd/system/sddm.service /etc/systemd/system/display-manager.service
+fi
+
+exit 0

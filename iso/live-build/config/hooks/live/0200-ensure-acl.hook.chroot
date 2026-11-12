@@ -1,0 +1,14 @@
+#!/bin/sh
+# Zorg dat setfacl aanwezig is; snapper gebruikt ACL's voor ALLOW_USERS.
+# In de toekomst staat acl ook in de pakketlijst, maar deze hook maakt de
+# build ook goed als een oudere pakketlijst wordt gebruikt.
+set -e
+
+if ! command -v setfacl >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y acl || {
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y acl
+    }
+fi
+
+exit 0

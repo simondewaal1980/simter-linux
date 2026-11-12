@@ -1,0 +1,40 @@
+#!/bin/sh
+# live-build-configuratie voor de Quickshell Desktop ISO.
+#
+# Dit script wordt door build.sh aangeroepen met `sh auto/config`, vanuit de
+# tijdelijke buildmap. Het maakt een hybride ISO (BIOS + UEFI) op basis van
+# Debian sid. De live-omgeving is een volledige LXQt-sessie met Calamares;
+# de geïnstalleerde desktop is BSPWM + Quickshell.
+
+set -e
+
+lb config noauto \
+  --mode debian \
+  --distribution sid \
+  --architectures amd64 \
+  --binary-images iso-hybrid \
+  --bootloaders "syslinux,grub-efi" \
+  --debian-installer none \
+  --archive-areas "main contrib non-free non-free-firmware" \
+  --security false \
+  --updates false \
+  --backports false \
+  --apt-recommends true \
+  --apt-indices false \
+  --apt-source-archives false \
+  --firmware-binary true \
+  --firmware-chroot true \
+  --memtest none \
+  --win32-loader false \
+  --initsystem systemd \
+  --initramfs live-boot \
+  --linux-flavours amd64 \
+  --linux-packages "linux-image" \
+  --iso-application "Quickshell Desktop" \
+  --iso-preparer "Quickshell Desktop ISO builder" \
+  --iso-publisher "Quickshell Desktop" \
+  --iso-volume "QUICKSHELL" \
+  --image-name "quickshell-desktop" \
+  --bootappend-live "boot=live components hostname=quickshell username=user user-fullname=Quickshell user-password=live quiet loglevel=3" \
+  --uefi-secure-boot disable \
+  --zsync false

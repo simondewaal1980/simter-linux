@@ -1,0 +1,1 @@
+/opt/quickshell/scripts/apply-bspwm-settings.sh

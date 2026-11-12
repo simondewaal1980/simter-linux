@@ -1,0 +1,38 @@
+---
+componentName:   quickshell
+welcomeStyleCalamares: true
+welcomeExpandingLogo: true
+windowExpanding: normal
+windowSize: 900px,620px
+windowPlacement: center
+
+strings:
+    productName:         Quickshell Desktop
+    shortProductName:    Quickshell
+    version:             1.0
+    shortVersion:        1.0
+    versionedName:       Quickshell Desktop 1.0 (Debian sid)
+    shortVersionedName:  Quickshell 1.0
+    bootloaderEntryName: Quickshell
+    productUrl:          https://quickshell.org/
+    supportUrl:          https://quickshell.org/
+    knownIssuesUrl:      https://github.com/quickshell-mirror/quickshell/issues
+    releaseNotesUrl:     https://github.com/quickshell-mirror/quickshell/releases
+
+sidebar: widget
+navigation: widget
+
+images:
+    productLogo:         "productLogo.png"
+    productIcon:         "productIcon.png"
+    productWelcome:      "welcome.png"
+
+slideshow:               "show.qml"
+
+style:
+   SidebarBackground:    "#1e1e2e"
+   SidebarText:          "#cdd6f4"
+   SidebarTextCurrent:   "#11111b"
+   SidebarBackgroundCurrent: "#89b4fa"
+
+slideshowAPI: 2

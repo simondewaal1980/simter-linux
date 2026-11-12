@@ -1,0 +1,49 @@
+#!/bin/sh
+# live-config component: start Calamares automatisch in de live-sessie.
+#
+# Dit bestand staat in de squashfs, maar de gemaakte autostart hoort bij de
+# live-sessie (overlay) en komt dus niet in het geïnstalleerde systeem
+# terecht. De live-gebruiker heeft via live-config wachtwoordloos sudo.
+
+. /usr/lib/live/config.sh
+
+Init()
+{
+    pkg_is_installed "calamares" || exit 0
+    component_was_executed "calamares" && exit 0
+    echo -n " calamares"
+}
+
+Config()
+{
+    mkdir -p /etc/xdg/autostart
+    cat >/etc/xdg/autostart/90-calamares.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Quickshell Desktop installeren
+Comment=Start de Calamares-installatie
+Exec=sh -c 'sleep 3; exec sudo DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" QT_QPA_PLATFORM=xcb calamares'
+Icon=calamares
+Terminal=false
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+EOF
+
+    # Snelkoppeling op het bureaublad van de live-gebruiker.
+    if [ -n "${LIVE_USERNAME:-}" ] && id "$LIVE_USERNAME" >/dev/null 2>&1; then
+        user_home=$(getent passwd "$LIVE_USERNAME" | cut -d: -f6)
+        if [ -n "$user_home" ] && [ -d "$user_home" ]; then
+            mkdir -p "$user_home/Desktop"
+            cp /usr/share/applications/install-quickshell.desktop \
+               "$user_home/Desktop/install-quickshell.desktop" 2>/dev/null || true
+            chmod 755 "$user_home/Desktop/install-quickshell.desktop" 2>/dev/null || true
+            chown -R "$LIVE_USERNAME:$LIVE_USERNAME" "$user_home/Desktop" 2>/dev/null || true
+        fi
+    fi
+
+    touch /var/lib/live/config/calamares
+}
+
+Cmdline
+Init
+Config

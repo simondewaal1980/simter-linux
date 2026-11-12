@@ -9,7 +9,23 @@
 # apply-settings.sh, zodat BSPWM en de Quickshell-bar dezelfde bron gebruiken.
 
 CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/bspwm
-QUICKSHELL_DIR=$HOME/projecten/quickshell
+
+# Op de ontwikkelmachine staat het project in ~/projecten/quickshell. De
+# installer-ISO levert het systeembreed in /opt/quickshell en maakt daarnaast
+# een symlink ~/projecten/quickshell voor scripts die dit pad verwachten.
+if [ -z "${QUICKSHELL_DIR:-}" ]; then
+  if [ -d "$HOME/projecten/quickshell" ]; then
+    QUICKSHELL_DIR=$HOME/projecten/quickshell
+  else
+    QUICKSHELL_DIR=/opt/quickshell
+  fi
+fi
+
+# Zorg bij elke login dat de gebruikerssymlinks en standaardwallpaper bestaan.
+# Idempotent; bestaande gebruikersbestanden worden niet overschreven.
+if [ -x /usr/local/bin/quickshell-user-setup ]; then
+  /usr/local/bin/quickshell-user-setup >/dev/null 2>&1 || true
+fi
 
 # User-local binaries (zoals matugen). Zonder deze regel zou een
 # loginomgeving die ~/.local/bin niet in PATH heeft ze niet vinden.

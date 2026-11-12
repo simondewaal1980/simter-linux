@@ -1,0 +1,39 @@
+#!/bin/sh
+# Live-build hook: laatste rechten en alternatieven in de live-omgeving.
+set -e
+
+# De live-sessie is LXQt, zodat Calamares een volwaardige X11-sessie heeft.
+if [ -x /usr/bin/startlxqt ]; then
+    update-alternatives --set x-session-manager /usr/bin/startlxqt >/dev/null 2>&1 || true
+fi
+
+# SDDM is de displaymanager, ook als task-lxqt-desktop lightdm meetrekt.
+# live-config schrijft bij de boot /etc/sddm.conf met de autologin.
+if command -v sddm >/dev/null 2>&1; then
+    printf 'sddm shared/default-x-display-manager select sddm\n' \
+        | debconf-set-selections 2>/dev/null || true
+    systemctl disable lightdm >/dev/null 2>&1 || true
+    systemctl enable sddm >/dev/null 2>&1 || true
+    mkdir -p /etc/X11
+    printf '/usr/bin/sddm\n' >/etc/X11/default-display-manager
+    ln -sf /lib/systemd/system/sddm.service /etc/systemd/system/display-manager.service
+fi
+
+# Onze componenten en scripts zijn uitvoerbaar.
+chmod 755 /usr/local/bin/quickshell-user-setup \
+          /usr/local/bin/quickshell-session \
+          /usr/local/lib/quickshell/install-target.sh \
+          /usr/lib/live/config/9999-calamares
+chmod 644 /usr/local/lib/quickshell/snapper-root.conf
+
+# De projectscripts in de squashfs moeten uitvoerbaar blijven.
+find /opt/quickshell/scripts -type f -name '*.sh' -exec chmod 755 {} +
+chmod 755 /opt/quickshell/config/bspwm/bspwmrc
+
+# Matugen is een losse binary in /usr/local/bin.
+[ -x /usr/local/bin/matugen ] && chmod 755 /usr/local/bin/matugen || true
+
+# De live-gebruiker krijgt dezelfde skel-configuratie via /etc/skel.
+chmod 755 /etc/skel/.config/bspwm 2>/dev/null || true
+
+exit 0

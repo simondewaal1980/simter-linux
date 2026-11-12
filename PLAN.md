@@ -23,6 +23,7 @@
 - [x] Aanvullend — Donker thema en wallpaper-palet (matugen)
 - [x] Aanvullend — Eigen sneltoetsen toevoegen/bewerken in het overzicht
 - [x] Aanvullend — Snapper-widget voor btrfs-momentopnamen
+- [x] Aanvullend — Installer-ISO met Calamares en de BTRFS-configuratie
 
 ---
 
@@ -1063,6 +1064,106 @@ JSON-ontleding is apart getest.
 
 **Klaar als:** de widget zonder fouten start, de lijst toont wanneer de
 gebruiker leesrechten heeft, en aanmaken/verwijderen via de service werkt.
+
+---
+
+## Aanvullend — Installer-ISO met Calamares en de BTRFS-configuratie
+
+**Doel:** één hybride ISO (BIOS + UEFI) die deze desktop installeert met
+Calamares en daarbij de BTRFS-indeling van de bronmachine overneemt.
+
+### Ontwerp
+
+De ISO wordt met `live-build` op Debian sid gebouwd. De live-omgeving is een
+volledige LXQt-sessie (zodat Calamares een echte X11-sessie heeft); Calamares
+start automatisch en is ook via het menu en een bureaubladsnelkoppeling te
+openen. De squashfs bevat de volledige desktopstack, zodat de installatie
+offline werkt.
+
+De bronmachine gebruikt op `/dev/vda2` één BTRFS-filesystem met root-subvolume
+`@rootfs` (geen aparte `@home`), `noatime,compress=zlib:3,discard=async,
+space_cache=v2` en snapper met een geneste `/.snapshots`-subvolume. De
+top-level subvolumes `@`, `@home`, `@log` en `@pkg` op die schijf zijn
+restanten van een eerdere indeling: ze staan niet in `fstab` en worden niet
+overgenomen. De installer maakt daarom:
+
+| Onderdeel | Calamares-configuratie |
+|---|---|
+| Partitionering | EFI 1 GiB (`/boot/efi`, `umask=0077`) + één BTRFS-root, GPT bij UEFI |
+| Root-subvolume | `btrfsSubvolumes: /@rootfs` via `mount.conf` |
+| fstab | `noatime,compress=zlib:3,discard=async,space_cache=v2` |
+| GRUB | `rootflags=subvol=@rootfs`, EFI-fallback ingeschakeld |
+| Snapper | `snapper -c root create-config /`, `ALLOW_USERS=<gekozen gebruiker>`, ACL op `/.snapshots` |
+| Swap | geen, net als de bronmachine |
+| Diensten | SDDM, NetworkManager, bluetooth, snapper-timeline/cleanup, fstrim |
+
+### Bestanden
+
+```
+iso/
+├── build.sh                 # root-buildscript, staget repo + assets, draait live-build
+├── README.md                # build- en installatie-uitleg
+├── live-build/
+│   ├── auto/config          # lb config: sid, amd64, iso-hybrid, syslinux+grub-efi
+│   ├── auto/build
+│   └── config/
+│       ├── package-lists/quickshell.list.chroot
+│       ├── hooks/live/0100-quickshell.hook.chroot
+│       └── includes.chroot/... (via overlay)
+├── overlay/
+│   ├── etc/skel/...         # symlinks naar /opt/quickshell en settings.json
+│   ├── usr/local/bin/quickshell-session
+│   ├── usr/local/bin/quickshell-user-setup
+│   ├── usr/local/lib/quickshell/install-target.sh
+│   ├── usr/lib/live/config/9999-calamares
+│   └── usr/share/applications/install-quickshell.desktop
+├── calamares/
+│   ├── settings.conf        # sequence + shellprocess-instanties
+│   ├── modules/*.conf
+│   └── branding/quickshell/ # branding.desc, show.qml, afbeeldingen
+└── out/                     # ISO + sha256 (niet in git)
+```
+
+### Aanpassingen aan de desktop
+
+- [x] `config/bspwm/bspwmrc` gebruikt `$QUICKSHELL_DIR` en valt terug op
+      `/opt/quickshell`; het script start `quickshell-user-setup`.
+- [x] `/usr/share/xsessions/bspwm.desktop` start via
+      `/usr/local/bin/quickshell-session`, dat eerst de gebruikerssetup doet.
+- [x] `quickshell-user-setup` maakt symlinks, kopieert de wallpaper en de
+      Griekse wallpapers, en legt `~/projecten/quickshell` aan.
+- [x] `qt6ct` is als systeempakket in de ISO opgenomen (geen user-local
+      fallback nodig).
+- [x] Matugen 4.2.0 wordt als binary meegebundeld in `/usr/local/bin`.
+- [x] Google Chrome en persoonlijke bestanden gaan niet mee; de rest van de
+      handmatig geïnstalleerde pakketten wel.
+- [x] De LiveCalamares-configuratie verwijdert live-boot/live-config en
+      Calamares vóór de initramfs wordt gegenereerd.
+
+### Verificatie
+
+- [x] `sudo iso/build.sh` eindigt met een ISO en een `.sha256`
+      (2,2 GiB, `quickshell-desktop-amd64.iso`).
+- [x] `iso/verify-iso.sh` controleert de BIOS- en UEFI-bootimages, de
+      squashfs, `/opt/quickshell`, Calamares, matugen, SDDM (geen LightDM),
+      geen NVIDIA-GLX, en de BTRFS-mountopties.
+- [x] De ISO boot in QEMU (UEFI, OVMF) in LXQt; Calamares opent automatisch
+      en toont de Quickshell-branding.
+- [x] Een installatie op een lege 24 GiB virtuele schijf levert:
+      `findmnt /` met `subvol=/@rootfs` en de juiste mountopties;
+      `btrfs subvolume list /` met `@rootfs` en `.snapshots`;
+      `snapper`-configuratie `root` met `ALLOW_USERS` en `SYNC_ACL`;
+      `grub.cfg` met `rootflags=subvol=@rootfs`;
+      SDDM als displaymanager en de bspwm-sessie als standaard.
+- [x] Na de eerste login start de Quickshell-bar met workspaces, klok, weer,
+      volume, meldingen, Snapper-teller, instellingen en de powerknop.
+- [x] `Super+/` (sneltoetsenoverzicht, 71 bindingen), `Super+Shift+S`
+      (BSPWM-instellingen), een D-Bus-notificatie (popup + badge) en de
+      Snapper-teller in de bar getest op de geïnstalleerde schijf.
+
+**Klaar als:** de ISO op echte hardware of in QEMU installeert en het
+geïnstalleerde systeem dezelfde BTRFS-root, snapper-configuratie en
+Quickshell-desktop heeft als de bronmachine.
 
 ---
 

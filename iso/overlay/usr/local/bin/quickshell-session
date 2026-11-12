@@ -1,0 +1,12 @@
+#!/bin/sh
+# quickshell-session — X11-sessie voor BSPWM + Quickshell.
+#
+# Deze wrapper draait vóór bspwm de idempotente gebruikerssetup, zodat ook
+# een gloednieuwe gebruiker meteen de juiste symlinks, wallpaper en
+# Quickshell-configuratie heeft. Daarna neemt bspwm het over via bspwmrc.
+
+if [ -x /usr/local/bin/quickshell-user-setup ]; then
+    /usr/local/bin/quickshell-user-setup >/dev/null 2>&1 || true
+fi
+
+exec bspwm

@@ -1,0 +1,38 @@
+#!/bin/sh
+# live-config component: zet vóór de LXQt-sessie een geldige window manager,
+# zodat de eenmalige "Welcome to LXQt"-dialoog niet verschijnt en Calamares
+# direct kan starten. De systeembrede default staat in
+# /etc/xdg/lxqt/session.conf; dit zet daarnaast de gebruikerskopie.
+
+. /usr/lib/live/config.sh
+
+Init()
+{
+    pkg_is_installed "lxqt-session" || exit 0
+    component_was_executed "lxqt" && exit 0
+    echo -n " lxqt"
+}
+
+Config()
+{
+    if [ -n "${LIVE_USERNAME:-}" ] && id "$LIVE_USERNAME" >/dev/null 2>&1; then
+        user_home=$(getent passwd "$LIVE_USERNAME" | cut -d: -f6)
+        if [ -n "$user_home" ] && [ -d "$user_home" ]; then
+            mkdir -p "$user_home/.config/lxqt"
+            cat >"$user_home/.config/lxqt/session.conf" <<'EOF'
+[General]
+window_manager=xfwm4
+EOF
+            cat >"$user_home/.config/lxqt/lxqt.conf" <<'EOF'
+[General]
+__userfile__=true
+EOF
+            chown -R "$LIVE_USERNAME:$LIVE_USERNAME" "$user_home/.config/lxqt"
+        fi
+    fi
+    touch /var/lib/live/config/lxqt
+}
+
+Cmdline
+Init
+Config
