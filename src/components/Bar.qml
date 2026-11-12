@@ -29,6 +29,7 @@ PanelWindow {
         bar.closeNotificationCenter()
         bar.closePowerMenu()
         bar.closeSnapperPopup()
+        bar.closeUpdatesPopup()
         weatherPopup.visible = true
     }
 
@@ -49,6 +50,7 @@ PanelWindow {
         bar.closeWeatherPopup()
         bar.closePowerMenu()
         bar.closeSnapperPopup()
+        bar.closeUpdatesPopup()
         tray.hideTooltip()
         notificationCenter.visible = true
     }
@@ -72,10 +74,14 @@ PanelWindow {
     // Spiegel voor `qs ipc call snapper status`.
     property bool snapperPopupVisible: false
 
+    // Spiegel voor `qs ipc call updates status`.
+    property bool updatesPopupVisible: false
+
     function openPowerMenu() {
         bar.closeWeatherPopup()
         bar.closeNotificationCenter()
         bar.closeSnapperPopup()
+        bar.closeUpdatesPopup()
         tray.hideTooltip()
         powerMenu.visible = true
     }
@@ -96,6 +102,7 @@ PanelWindow {
         bar.closeWeatherPopup()
         bar.closeNotificationCenter()
         bar.closePowerMenu()
+        bar.closeUpdatesPopup()
         tray.hideTooltip()
         Snapper.refresh()
         snapperPopup.visible = true
@@ -112,12 +119,35 @@ PanelWindow {
             bar.openSnapperPopup()
     }
 
+    // Via `qs ipc call updates open|close|toggle` en de update-widget.
+    function openUpdatesPopup() {
+        bar.closeWeatherPopup()
+        bar.closeNotificationCenter()
+        bar.closePowerMenu()
+        bar.closeSnapperPopup()
+        tray.hideTooltip()
+        Updates.refresh()
+        updatesPopup.visible = true
+    }
+
+    function closeUpdatesPopup() {
+        updatesPopup.visible = false
+    }
+
+    function toggleUpdatesPopup() {
+        if (updatesPopup.visible)
+            bar.closeUpdatesPopup()
+        else
+            bar.openUpdatesPopup()
+    }
+
     onShownChanged: {
         if (!bar.shown) {
             weatherPopup.visible = false
             notificationCenter.visible = false
             powerMenu.visible = false
             snapperPopup.visible = false
+            updatesPopup.visible = false
             tray.hideTooltip()
         }
     }
@@ -156,6 +186,7 @@ PanelWindow {
                 bar.closeNotificationCenter()
                 bar.closePowerMenu()
                 bar.closeSnapperPopup()
+                bar.closeUpdatesPopup()
                 tray.hideTooltip()
             }
         }
@@ -188,8 +219,9 @@ PanelWindow {
             anchors.centerIn: parent
         }
 
-        // Rechts: venstertitel, weer, muziek, volume, accu, meldingen,
-        // sneltoetsen, instellingen en tray. Netwerk loopt via de tray.
+        // Rechts: venstertitel, weer, snapper, updates, muziek, volume, accu,
+        // meldingen, sneltoetsen, instellingen en tray. Netwerk loopt via de
+        // tray.
         Row {
             anchors {
                 right: parent.right
@@ -223,6 +255,14 @@ PanelWindow {
                 id: snapperWidget
                 anchors.verticalCenter: parent.verticalCenter
                 onClicked: bar.toggleSnapperPopup()
+            }
+
+            // Updates: aantal beschikbare APT- en Flatpak-updates; klik opent
+            // de lijst en de knop om alles bij te werken.
+            UpdatesWidget {
+                id: updatesWidget
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: bar.toggleUpdatesPopup()
             }
 
             // Muziek (alleen als er een MPRIS-speler met een nummer is).
@@ -441,5 +481,11 @@ PanelWindow {
             bar.closeSnapperPopup()
             bar.snapperCreateRequested()
         }
+    }
+
+    // Updates: APT en Flatpak bekijken en bijwerken.
+    UpdatesPopup {
+        id: updatesPopup
+        barWindow: bar
     }
 }

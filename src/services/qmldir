@@ -5,3 +5,4 @@ singleton Notifications 1.0 NotificationDaemon.qml
 singleton Power 1.0 Power.qml
 singleton Wallpaper 1.0 Wallpaper.qml
 singleton Snapper 1.0 Snapper.qml
+singleton Updates 1.0 Updates.qml

@@ -3,8 +3,10 @@
 // Toont de momentopnamen van de actieve snapper-configuratie, met per regel
 // nummer, type, datum, gebruiker en beschrijving. Vanuit hier kan de
 // configuratie worden gewisseld, een nieuwe momentopname worden aangemaakt
-// (via het FloatingWindow SnapperCreateWindow) en een momentopname worden
-// verwijderd. Verwijderen vraagt om een tweede klik op het vinkje.
+// (via het FloatingWindow SnapperCreateWindow), een momentopname worden
+// verwijderd of teruggerold, en kunnen de oudste momentopnamen worden
+// opgeruimd tot er maximaal 10 overblijven. Verwijderen, opruimen en rollback
+// vragen om een tweede klik.
 //
 // Het venster opent onder de bar, rechts uitgelijnd. Onder X11 krijgt een
 // PopupWindow geen toetsenbordfocus (issue #794); de popup bevat daarom geen
@@ -29,6 +31,8 @@ PopupWindow {
     readonly property int listMaxHeight: Theme.scaled(430)
 
     property int confirmDelete: -1
+    property int confirmRollback: -1
+    property bool confirmCleanup: false
 
     readonly property bool showingAccessError:
         Snapper.accessError.length > 0 && Snapper.lastError.length === 0
@@ -51,7 +55,7 @@ PopupWindow {
         if (popup.barWindow)
             popup.barWindow.snapperPopupVisible = popup.visible
         if (popup.visible) {
-            popup.confirmDelete = -1
+            popup.clearConfirmations()
             Snapper.refresh()
         }
     }
@@ -61,12 +65,25 @@ PopupWindow {
         interval: 5000
         repeat: false
         running: false
-        onTriggered: popup.confirmDelete = -1
+        onTriggered: {
+            popup.confirmDelete = -1
+            popup.confirmRollback = -1
+            popup.confirmCleanup = false
+        }
+    }
+
+    function clearConfirmations() {
+        popup.confirmDelete = -1
+        popup.confirmRollback = -1
+        popup.confirmCleanup = false
+        confirmTimer.stop()
     }
 
     function requestDelete(number) {
         if (Snapper.busy)
             return
+        popup.confirmRollback = -1
+        popup.confirmCleanup = false
         if (popup.confirmDelete === number) {
             popup.confirmDelete = -1
             confirmTimer.stop()
@@ -74,6 +91,36 @@ PopupWindow {
             return
         }
         popup.confirmDelete = number
+        confirmTimer.restart()
+    }
+
+    function requestRollback(number) {
+        if (Snapper.busy || !Snapper.rollbackSupported)
+            return
+        popup.confirmDelete = -1
+        popup.confirmCleanup = false
+        if (popup.confirmRollback === number) {
+            popup.confirmRollback = -1
+            confirmTimer.stop()
+            Snapper.rollback(number)
+            return
+        }
+        popup.confirmRollback = number
+        confirmTimer.restart()
+    }
+
+    function requestCleanup() {
+        if (Snapper.busy || Snapper.cleanupCount === 0)
+            return
+        popup.confirmDelete = -1
+        popup.confirmRollback = -1
+        if (popup.confirmCleanup) {
+            popup.confirmCleanup = false
+            confirmTimer.stop()
+            Snapper.cleanup(Snapper.cleanupLimit)
+            return
+        }
+        popup.confirmCleanup = true
         confirmTimer.restart()
     }
 
@@ -186,6 +233,53 @@ PopupWindow {
                         enabled: Snapper.available && !Snapper.busy
                         cursorShape: Qt.PointingHandCursor
                         onClicked: popup.createRequested()
+                    }
+                }
+
+                // Opruimen: eerste klik wapent, tweede klik verwijdert de
+                // oudste momentopnamen tot er maximaal 10 overblijven.
+                Rectangle {
+                    Layout.preferredWidth: cleanupLabel.implicitWidth
+                        + Theme.scaled(18)
+                    Layout.preferredHeight: Theme.scaled(24)
+                    radius: Theme.radiusSmall
+                    color: popup.confirmCleanup ? Theme.red
+                        : (cleanupArea.containsMouse
+                            ? Theme.surface1 : Theme.surface0)
+                    opacity: Snapper.available && Snapper.cleanupCount > 0
+                        ? 1 : 0.45
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: Theme.scaled(5)
+
+                        Text {
+                            text: "\uf51a" // broom
+                            color: popup.confirmCleanup
+                                ? Theme.crust : Theme.accent
+                            font.family: Theme.iconFamily
+                            font.pixelSize: Theme.fontSmall
+                        }
+
+                        Text {
+                            id: cleanupLabel
+                            text: popup.confirmCleanup ? "Zeker?" : "Opruimen"
+                            color: popup.confirmCleanup
+                                ? Theme.crust : Theme.text
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSmall
+                            font.weight: Font.DemiBold
+                        }
+                    }
+
+                    MouseArea {
+                        id: cleanupArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: Snapper.available && !Snapper.busy
+                            && Snapper.cleanupCount > 0
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: popup.requestCleanup()
                     }
                 }
 
@@ -463,16 +557,23 @@ PopupWindow {
 
                         readonly property bool confirming:
                             popup.confirmDelete === row.modelData.number
+                        readonly property bool confirmingRollback:
+                            popup.confirmRollback === row.modelData.number
                         readonly property bool protectedSnapshot:
                             row.modelData.isDefault || row.modelData.isActive
+                        readonly property bool rollbackProtected:
+                            row.modelData.isActive
+                                || !Snapper.rollbackSupported
 
                         width: popup.innerWidth
                         implicitHeight: rowContent.implicitHeight + Theme.scaled(12)
                         radius: Theme.radiusSmall
-                        color: row.confirming ? Theme.surface0
+                        color: row.confirming || row.confirmingRollback
+                            ? Theme.surface0
                             : (rowHover.containsMouse ? Theme.surface0 : Theme.mantle)
                         border.width: 1
-                        border.color: row.confirming ? Theme.red : Theme.surface0
+                        border.color: row.confirming ? Theme.red
+                            : (row.confirmingRollback ? Theme.yellow : Theme.surface0)
 
                         MouseArea {
                             id: rowHover
@@ -552,12 +653,16 @@ PopupWindow {
                                     text: {
                                         if (row.confirming)
                                             return "Klik op het vinkje om te verwijderen"
+                                        if (row.confirmingRollback)
+                                            return "Klik nogmaals om terug te rollen"
                                         let value = Snapper.dateLabel(row.modelData.date)
                                         if (row.modelData.user.length > 0)
                                             value += " · " + row.modelData.user
                                         return value
                                     }
-                                    color: row.confirming ? Theme.red : Theme.barMuted
+                                    color: row.confirming ? Theme.red
+                                        : (row.confirmingRollback
+                                            ? Theme.yellow : Theme.barMuted)
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontSmall
                                     elide: Text.ElideRight
@@ -578,6 +683,65 @@ PopupWindow {
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontTiny
                                     font.weight: Font.DemiBold
+                                }
+                            }
+
+                            // Rollback: één klik wapent, het vinkje
+                            // bevestigt. De actieve momentopname is geen
+                            // zinvol doel en krijgt daarom een slotje.
+                            Item {
+                                Layout.preferredWidth: Theme.scaled(22)
+                                Layout.preferredHeight: Theme.scaled(22)
+                                Layout.alignment: Qt.AlignVCenter
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: Theme.radiusSmall
+                                    color: row.rollbackProtected
+                                        ? "transparent"
+                                        : (row.confirmingRollback
+                                            ? Theme.yellow
+                                            : (rollbackArea.containsMouse
+                                                ? Theme.surface1 : "transparent"))
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: row.rollbackProtected
+                                        || !row.confirmingRollback
+                                    text: row.rollbackProtected
+                                        ? "\uf023" // lock
+                                        : "\uf0e2" // arrow-rotate-left
+                                    color: row.rollbackProtected
+                                        ? Theme.overlay1
+                                        : (row.confirmingRollback
+                                            ? Theme.crust : Theme.yellow)
+                                    opacity: row.rollbackProtected ? 0.7 : 0.9
+                                    font.family: Theme.iconFamily
+                                    font.pixelSize: Theme.fontSmall
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: !row.rollbackProtected
+                                        && row.confirmingRollback
+                                    text: "\uf00c" // check
+                                    color: Theme.crust
+                                    font.family: Theme.iconFamily
+                                    font.pixelSize: Theme.fontSmall
+                                    font.weight: Font.Bold
+                                }
+
+                                MouseArea {
+                                    id: rollbackArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: !row.rollbackProtected
+                                        && !Snapper.busy
+                                    cursorShape: row.rollbackProtected
+                                        ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                    onClicked: popup.requestRollback(
+                                        row.modelData.number)
                                 }
                             }
 
@@ -627,7 +791,9 @@ PopupWindow {
                                     id: deleteArea
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    enabled: !row.protectedSnapshot && !Snapper.busy
+                                    enabled: !row.protectedSnapshot
+                                        && !row.confirmingRollback
+                                        && !Snapper.busy
                                     cursorShape: row.protectedSnapshot
                                         ? Qt.ArrowCursor : Qt.PointingHandCursor
                                     onClicked: popup.requestDelete(row.modelData.number)
@@ -636,11 +802,12 @@ PopupWindow {
 
                             // Annuleren verschijnt naast het vinkje.
                             Item {
-                                Layout.preferredWidth: row.confirming
-                                    ? Theme.scaled(22) : 0
+                                Layout.preferredWidth:
+                                    row.confirming || row.confirmingRollback
+                                        ? Theme.scaled(22) : 0
                                 Layout.preferredHeight: Theme.scaled(22)
                                 Layout.alignment: Qt.AlignVCenter
-                                visible: row.confirming
+                                visible: row.confirming || row.confirmingRollback
 
                                 Rectangle {
                                     anchors.fill: parent
@@ -662,10 +829,7 @@ PopupWindow {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        popup.confirmDelete = -1
-                                        confirmTimer.stop()
-                                    }
+                                    onClicked: popup.clearConfirmations()
                                 }
                             }
                         }
@@ -686,14 +850,31 @@ PopupWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    text: Snapper.busy && Snapper.pendingAction === "create"
-                        ? "Momentopname wordt aangemaakt…"
-                        : (Snapper.busy && Snapper.pendingAction === "delete"
-                            ? "Momentopname wordt verwijderd…"
-                            : (Snapper.accessError.length > 0
-                                ? "Geen leestoegang — acties vragen om bevoegdheid"
-                                : "Laatst bijgewerkt: " + Snapper.updatedLabel()))
-                    color: Snapper.busy ? Theme.yellow : Theme.overlay1
+                    text: Snapper.busy && Snapper.pendingAction === "cleanup"
+                        ? "Oudste momentopnamen worden opgeruimd…"
+                        : (Snapper.busy && Snapper.pendingAction === "rollback"
+                            ? "Rollback wordt voorbereid…"
+                            : (popup.confirmCleanup
+                                ? "Verwijdert " + Snapper.cleanupCount
+                                    + " oudste momentopnamen; max "
+                                    + Snapper.cleanupLimit + " blijven staan"
+                                : (popup.confirmRollback >= 0
+                                    ? "Rollback naar #"
+                                        + popup.confirmRollback
+                                        + " voorbereiden; daarna herstarten"
+                                    : (Snapper.busy
+                                        && Snapper.pendingAction === "create"
+                                        ? "Momentopname wordt aangemaakt…"
+                                        : (Snapper.busy
+                                            && Snapper.pendingAction === "delete"
+                                            ? "Momentopname wordt verwijderd…"
+                                            : (Snapper.accessError.length > 0
+                                                ? "Geen leestoegang — acties vragen om bevoegdheid"
+                                                : "Laatst bijgewerkt: "
+                                                    + Snapper.updatedLabel()))))))
+                    color: popup.confirmCleanup ? Theme.red
+                        : (popup.confirmRollback >= 0 || Snapper.busy
+                            ? Theme.yellow : Theme.overlay1)
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSmall
                     elide: Text.ElideRight

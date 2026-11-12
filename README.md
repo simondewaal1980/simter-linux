@@ -13,7 +13,7 @@ gekopieerd bij het starten.
 
 | Onderdeel | Functie |
 |---|---|
-| **Bar** | Workspaces (focus/bezet/urgent), layoutindicator, venstertitel, klok, weer, MPRIS, volume, accu, meldingen, sneltoetsen, instellingen en systeemvak |
+| **Bar** | Workspaces (focus/bezet/urgent), layoutindicator, venstertitel, klok, weer, snapper, updates, MPRIS, volume, accu, meldingen, sneltoetsen, instellingen en systeemvak |
 | **BSPWM-integratie** | Live status via `bspc subscribe report`; klikbare workspaces; herverbindt na `bspc wm -r` |
 | **Weer** | Eindhoven via Open-Meteo, 10-minutenverversing, 3-daagse verwachting en offline cache |
 | **Notificaties** | Quickshell is de enige `org.freedesktop.Notifications`-daemon: popups, geschiedenis (50), acties, DND en een centrum |
@@ -23,6 +23,7 @@ gekopieerd bij het starten.
 | **Volume** | Pipewire via Quickshell, met automatische `pactl`-terugval voor PulseAudio |
 | **Accu** | UPower-widget, alleen zichtbaar als er echt een accu is |
 | **Snapper** | Btrfs-momentopnamen in de bar: aantal, configuratiekeuze, lijst, aanmaken en verwijderen |
+| **Updates** | APT- en Flatpak-updates: aantal in de bar, lijst per bron en bijwerken |
 | **Sessie** | Sessiemenu in de bar (rofi-terugval), screenshots, wallpaper, vergrendelscript |
 | **Wallpapers** | Venster met previews: toepassen, volgende, toevoegen via ingebouwde bestandsbrowser en verwijderen; downloadscript voor tien Griekse wallpapers |
 | **Thema** | Donker (Adwaita-dark + Papirus-Dark) met een Material You-palet uit de wallpaper voor bar, bspwm-randen, GTK 3/4, Qt 6 (qt6ct), alacritty en rofi |
@@ -88,6 +89,10 @@ sudo apt install i3lock
 # LXQt is als fallback geïnstalleerd en levert lxqt-policykit-agent;
 # bspwmrc start die automatisch. Op een kale installatie:
 sudo apt install lxqt-policykit
+
+# Flatpak-updates in de update-widget (optioneel; zonder flatpak toont de
+# widget alleen APT-updates).
+sudo apt install flatpak
 ```
 
 > `network-manager-gnome` bestaat niet meer in sid; `network-manager-applet`
@@ -366,7 +371,8 @@ Beschikbare doelen:
 | `shortcuts` | `open`, `close`, `toggle`, `status`, `list`, `add`, `update`, `remove`, `reload` |
 | `notifications` | `status`, `clear`, `dnd`, `getDnd`, `toggleDnd`, `open`, `close`, `toggle` |
 | `weather` | `status`, `refresh`, `open`, `close`, `toggle` |
-| `snapper` | `status`, `list`, `refresh`, `open`, `close`, `toggle`, `config`, `editor`, `create`, `remove` |
+| `snapper` | `status`, `list`, `refresh`, `open`, `close`, `toggle`, `config`, `editor`, `create`, `remove`, `cleanup`, `rollback` |
+| `updates` | `status`, `refresh`, `open`, `close`, `toggle`, `update` |
 | `wallpaper` | `status`, `list`, `refresh`, `open`, `close`, `toggle`, `next`, `set`, `add`, `remove` |
 | `power` | `status`, `open`, `close`, `toggle`, `lock`, `logout`, `sleep`, `shutdown` |
 | `bspwm` | `status` |
@@ -407,10 +413,14 @@ widget dus weg.
 
 `SnapperWidget` toont het aantal btrfs-momentopnamen in de actieve
 snapper-configuratie. Klikken opent een popup met de lijst (nieuwste eerst),
-de configuratiekeuze en knoppen om een momentopname aan te maken of te
-verwijderen. Aanmaken opent een klein FloatingWindow voor de beschrijving;
-verwijderen vraagt om een tweede klik. De lijst ververst elke twee minuten en
-bij het openen van de popup.
+de configuratiekeuze en knoppen om een momentopname aan te maken, te
+verwijderen, op te ruimen of terug te rollen. Aanmaken opent een klein
+FloatingWindow voor de beschrijving; verwijderen, opruimen en rollback vragen
+om een tweede klik. **Opruimen** verwijdert de oudste momentopnamen tot er
+maximaal 10 overblijven; standaard- en actieve momentopnamen blijven daarbij
+beschermd. Een **rollback** wordt per momentopname met het ↶-icoon gestart,
+maakt nieuwe momentopnamen aan en wordt pas actief na een herstart. De lijst
+ververst elke twee minuten en bij het openen van de popup.
 
 Lezen gebeurt met `snapper --jsonout list` en `snapper --jsonout
 list-configs`. Snapper beheert de momentopnamen via de root-daemon `snapperd`;
@@ -432,18 +442,41 @@ sudo snapper -c root set-config "ALLOW_USERS=$USER SYNC_ACL=yes"
 sudo setfacl -m "u:$USER:rx" /.snapshots
 ```
 
-Daarna werken bekijken, aanmaken en verwijderen zonder sudo of polkit: alle
-bewerkingen lopen via `snapperd`. Zonder die rechten blijft de widget zichtbaar
-met een gedempte telling en toont de popup het exacte commando. Aanmaken en
-verwijderen vallen dan terug op `pkexec`, wat een draaiende polkit-agent
-vereist (zie **Polkit**). Met `SNAPPER_ELEVATE` is dat elevatiecommando te
-vervangen (bijvoorbeeld `SNAPPER_ELEVATE='sudo -n'` of leeg voor geen
-elevatie). `SNAPPER_BIN` en `SNAPPER_CONFIG` zijn handig voor tests of een
-afwijkende installatie.
+Daarna werken bekijken, aanmaken, verwijderen, opruimen en rollback zonder
+sudo of polkit: alle bewerkingen lopen via `snapperd`. Zonder die rechten blijft
+de widget zichtbaar met een gedempte telling en toont de popup het exacte
+commando. Aanmaken, verwijderen, opruimen en rollback vallen dan terug op
+`pkexec`, wat een draaiende polkit-agent vereist (zie **Polkit**). Met
+`SNAPPER_ELEVATE` is dat elevatiecommando te vervangen (bijvoorbeeld
+`SNAPPER_ELEVATE='sudo -n'` of leeg voor geen elevatie). `SNAPPER_BIN` en
+`SNAPPER_CONFIG` zijn handig voor tests of een afwijkende installatie.
 
-Een rollback blijft bewust buiten de widget, omdat die de standaard-subvolume
-van het hele systeem wijzigt en meestal een herstart vraagt. Gebruik daarvoor
+Een rollback wijzigt de standaard-subvolume van het hele systeem en wordt pas
+actief na een herstart. Snapper ondersteunt dit alleen voor de root-subvolume;
+bij andere configuraties krijgt de rollbackknop een slotje. De popup waarschuwt
+verder en vraagt om een tweede klik. Handmatig kan het ook met
 `sudo snapper -c <config> rollback <nummer>`.
+
+### Updates
+
+`UpdatesWidget` toont het aantal beschikbare updates uit twee bronnen:
+APT (`apt list --upgradable`) en Flatpak (`flatpak remote-ls --updates`).
+Klikken opent een popup met de pakketten per bron, de oude en nieuwe versie
+(bij APT) of de versie en remote (bij Flatpak), en de knop **Bijwerken**. Die
+knop werkt eerst de systeempakketten bij en daarna de Flatpaks; omdat dit
+systeemwijzigingen zijn, vraagt hij om een tweede klik. De lijst ververst elke
+30 minuten en bij het openen van de popup.
+
+APT-updates worden met
+`pkexec sh -c "apt-get update && apt-get -y full-upgrade"` uitgevoerd;
+Flatpak regelt eventuele bevoegdheid zelf via polkit. `full-upgrade` is nodig
+voor updates die nieuwe dependencies installeren of verouderde pakketten
+vervangen; met een gewone `upgrade` blijven die als “kept back” in de lijst
+staan. Met `UPDATES_ELEVATE` is het elevatiecommando te vervangen (bijvoorbeeld
+`UPDATES_ELEVATE='sudo -n'` of leeg voor geen elevatie). `UPDATES_APT_BIN` en
+`UPDATES_FLATPAK_BIN` zijn handig voor tests of een afwijkende installatie.
+Ontbreekt Flatpak, dan blijft de widget APT-updates tonen en staat in de popup
+alleen de melding dat Flatpak ontbreekt.
 
 ### MPRIS
 
@@ -502,7 +535,20 @@ qs -p ~/projecten/quickshell ipc call shortcuts status
 qs -p ~/projecten/quickshell ipc call settings status
 qs -p ~/projecten/quickshell ipc call power status
 qs -p ~/projecten/quickshell ipc call snapper status
+qs -p ~/projecten/quickshell ipc call updates status
 qs -p ~/projecten/quickshell ipc call wallpaper status
+```
+
+Updates zijn ook zonder muis te testen:
+
+```bash
+# Status met APT- en Flatpak-tellingen en de gevonden pakketten
+qs -p ~/projecten/quickshell ipc call updates status
+qs -p ~/projecten/quickshell ipc call updates refresh
+
+# Popup openen en alles bijwerken (IPC start direct, zonder bevestiging)
+qs -p ~/projecten/quickshell ipc call updates open
+qs -p ~/projecten/quickshell ipc call updates update
 ```
 
 Snapper kan ook zonder muis worden getest:
@@ -516,6 +562,12 @@ qs -p ~/projecten/quickshell ipc call snapper list
 qs -p ~/projecten/quickshell ipc call snapper config root
 qs -p ~/projecten/quickshell ipc call snapper create "voor update"
 qs -p ~/projecten/quickshell ipc call snapper remove 12
+
+# Oudste momentopnamen verwijderen tot er maximaal 10 overblijven
+qs -p ~/projecten/quickshell ipc call snapper cleanup 10
+
+# Rollback voorbereiden; actief na een herstart
+qs -p ~/projecten/quickshell ipc call snapper rollback 12
 
 # Beschrijving invoeren via het venster
 qs -p ~/projecten/quickshell ipc call snapper editor
@@ -556,6 +608,7 @@ qs -p ~/projecten/quickshell ipc call wallpaper add ~/Pictures/foto.jpg
 | Volume-widget toont niets | Zowel PipeWire als `pactl`/PulseAudio ontbreken; installeer `pulseaudio-utils` |
 | Snapper-widget zegt “Geen toegang” | Draai eenmalig `sudo scripts/setup-snapper-access.sh` (zet `ALLOW_USERS` + `SYNC_ACL`; zie **Snapper**). Met polkit kan het ook via `pkexec scripts/setup-snapper-access.sh "$USER"`. Het exacte commando staat ook in de popup |
 | Snapper-actie vraagt om bevoegdheid maar er gebeurt niets | Controleer of `lxqt-policykit-agent` draait (`pgrep -af lxqt-policykit-agent`); stel anders `ALLOW_USERS` in (dan is pkexec niet nodig) of gebruik `SNAPPER_ELEVATE='sudo -n'` |
+| Updates blijven staan na **Bijwerken** | De resterende pakketten zijn “kept back” en vragen `apt-get full-upgrade` (nieuwe dependencies of te vervangen pakketten). De widget gebruikt dat commando; klik nogmaals op **Bijwerken**. Controleer vooraf met `apt-get -s full-upgrade` |
 | `Super+Alt+L` vergrendelt niet | Er is geen locker geïnstalleerd; installeer `i3lock` of `xsecurelock`. Het script toont nu een melding |
 | Geen polkit-popups | `bspwmrc` start `lxqt-policykit-agent` (uit `lxqt-policykit`); controleer `pgrep -af lxqt-policykit-agent` en `systemctl status polkit polkit-agent-helper.socket`. `lxpolkit` is een alternatief, maar werkte op deze machine niet met polkit 128 |
 | `bspc wm -r` verbreekt de bar | De Bspwm-service herverbindt binnen enkele seconden; geen actie nodig |
@@ -577,10 +630,10 @@ qs -p ~/projecten/quickshell ipc call wallpaper add ~/Pictures/foto.jpg
 shell.qml                     # root: bars, vensters, services, IPC
 src/
   theme/Theme.qml             # singleton; leest settings.json + wallpaper-palet
-  services/                   # Bspwm, BspwmSettings, Weather, Notifications, Power, Wallpaper, Snapper
-  components/                 # Bar, Workspaces, widgets (o.a. Snapper), Keycap, tray
+  services/                   # Bspwm, BspwmSettings, Weather, Notifications, Power, Wallpaper, Snapper, Updates
+  components/                 # Bar, Workspaces, widgets (o.a. Snapper en Updates), Keycap, tray
   components/settings/        # herbruikbare instellingenbesturing
-  popups/                     # weer, notificatiestack, notificatiecentrum, powermenu, snapper
+  popups/                     # weer, notificatiestack, notificatiecentrum, powermenu, snapper, updates
   windows/                    # SettingsWindow, ShortcutsWindow, WallpaperWindow, SnapperCreateWindow
   utils/                      # ReportParser.js, SxhkdParser.js, WeatherCodes.js
 config/

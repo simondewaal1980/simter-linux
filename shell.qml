@@ -4,10 +4,11 @@
 // Starten: qs -p /home/simon/projecten/quickshell
 //
 // Eén bar per scherm met live workspaces (Bspwm-service), layoutindicator,
-// venstertitel, weer (Weather-service), snapper, notificatiebel
-// (NotificationDaemon), systemtray (SystemTray-service) en klok. De
-// BSPWM-status komt uit `bspc subscribe report`; het weer uit Open-Meteo met
-// een lokale cache; notificaties lopen via de D-Bus-naam
+// venstertitel, weer (Weather-service), snapper, updates (Updates-service),
+// notificatiebel (NotificationDaemon), systemtray (SystemTray-service) en klok.
+// De BSPWM-status komt uit `bspc subscribe report`; het weer uit Open-Meteo met
+// een lokale cache; updates uit `apt list --upgradable` en
+// `flatpak remote-ls --updates`; notificaties lopen via de D-Bus-naam
 // org.freedesktop.Notifications.
 //
 // UseQApplication is nodig voor de tray-menu's: Quickshell tekent die met
@@ -345,7 +346,7 @@ ShellRoot {
 
     // Snapper: qs ipc call snapper open | close | toggle | status | list |
     //          refresh | config <naam> | create [beschrijving] | remove <nr> |
-    //          editor
+    //          cleanup <max> | rollback <nr> | editor
     IpcHandler {
         target: "snapper"
 
@@ -395,6 +396,53 @@ ShellRoot {
 
         function remove(number: int): bool {
             return Snapper.remove(number)
+        }
+
+        // Oudste momentopnamen verwijderen tot er maximaal `max` overblijven.
+        function cleanup(max: int): bool {
+            return Snapper.cleanup(max)
+        }
+
+        // Bereid een rollback voor; actief na een herstart.
+        function rollback(number: int): bool {
+            return Snapper.rollback(number)
+        }
+    }
+
+    // Updates: qs ipc call updates open | close | toggle | status | refresh |
+    //          update
+    IpcHandler {
+        target: "updates"
+
+        function open(): void {
+            if (barVariants.instances.length > 0)
+                barVariants.instances[0].openUpdatesPopup()
+        }
+
+        function close(): void {
+            if (barVariants.instances.length > 0)
+                barVariants.instances[0].closeUpdatesPopup()
+        }
+
+        function toggle(): void {
+            if (barVariants.instances.length > 0)
+                barVariants.instances[0].toggleUpdatesPopup()
+        }
+
+        function status(): string {
+            const base = Updates.status()
+            base.visible = barVariants.instances.length > 0
+                ? barVariants.instances[0].updatesPopupVisible : false
+            return JSON.stringify(base)
+        }
+
+        function refresh(): void {
+            Updates.refresh()
+        }
+
+        // Werkt eerst APT en daarna Flatpak bij (met bevestiging in de GUI).
+        function update(): bool {
+            return Updates.updateAll()
         }
     }
 

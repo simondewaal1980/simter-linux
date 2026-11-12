@@ -1043,6 +1043,10 @@ wordt gebruikt en via potlood/prullenbak weer aan te passen of te verwijderen is
 - [x] `SnapperWidget.qml`: icoon + aantal in de bar; klik opent de popup.
 - [x] `SnapperPopup.qml`: configuratiekeuze, lijst (nieuwste eerst), type,
   datum, gebruiker, beschrijving, aanmaken en verwijderen met bevestiging.
+- [x] Opruimactie: verwijdert de oudste momentopnamen tot er maximaal 10
+  overblijven; standaard- en actieve momentopnamen blijven beschermd.
+- [x] Rollback per momentopname met bevestiging en waarschuwing dat de
+  wijziging pas na een herstart actief wordt.
 - [x] `SnapperCreateWindow.qml`: FloatingWindow met beschrijvingsveld, omdat
   een PopupWindow onder X11 geen toetsenbordfocus krijgt.
 - [x] Mutaties via `pkexec` als de gebruiker alleen leesrechten heeft;
@@ -1052,11 +1056,12 @@ wordt gebruikt en via potlood/prullenbak weer aan te passen of te verwijderen is
   Zonder toegang toont de popup het exacte commando; met `ALLOW_USERS` lopen
   lezen én beheren via `snapperd`, dus zonder pkexec of polkit-agent.
 - [x] IPC: `snapper status | list | refresh | open | close | toggle | config |
-  editor | create | remove`.
+  editor | create | remove | cleanup | rollback`.
 - [x] bspwm-regel voor het nieuwe FloatingWindow en README-documentatie.
 
 **Verificatie:** met een fake-snapper zijn laden, configuratie wisselen,
-aanmaken, verwijderen en het openen van het invoervenster getest. Met de echte
+aanmaken, verwijderen, opruimen, rollback en het openen van het invoervenster
+getest. Met de echte
 snapper op deze machine (zonder `ALLOW_USERS`) verscheen de toegangsfout zonder
 QML-fouten in het log; de popup toont daarbij het eenmalige setup-commando.
 `scripts/setup-snapper-access.sh` is met `sh -n` gecontroleerd en de

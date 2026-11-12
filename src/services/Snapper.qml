@@ -40,6 +40,10 @@ Singleton {
 
     readonly property int refreshInterval: 2 * 60 * 1000
 
+    // Opruimen laat deze hoeveelheid momentopnamen staan. Standaard- en
+    // actieve momentopnamen zijn door snapper beschermd en tellen wel mee.
+    readonly property int cleanupLimit: 10
+
     // --- Status -----------------------------------------------------------
 
     property bool available: true
@@ -61,6 +65,9 @@ Singleton {
     readonly property int snapshotCount: root.snapshots.length
     readonly property var latestSnapshot: root.snapshots.length > 0
         ? root.snapshots[0] : null
+    readonly property var cleanupSelection:
+        root.cleanupCandidates(root.cleanupLimit)
+    readonly property int cleanupCount: root.cleanupSelection.length
 
     readonly property var activeConfigInfo: {
         for (let i = 0; i < root.configs.length; i++) {
@@ -72,6 +79,11 @@ Singleton {
 
     readonly property string activeSubvolume: root.activeConfigInfo
         ? root.activeConfigInfo.subvolume : ""
+
+    // Snapper weigert rollback voor configuraties op een niet-root subvolume.
+    // Zolang de subvolume onbekend is, laten we de CLI het oordeel geven.
+    readonly property bool rollbackSupported: root.activeSubvolume.length === 0
+        || root.activeSubvolume === "/"
 
     // Snapper-configuraties zijn eigendom van root en snapperd controleert
     // ALLOW_USERS. De widget kan die instelling niet zelf wijzigen; daarom
@@ -96,7 +108,9 @@ Singleton {
 
     property string pendingAction: ""
     property int pendingNumber: -1
+    property var pendingNumbers: []
     property string pendingDescription: ""
+    property bool pendingElevated: false
     property string actionOutput: ""
     property string actionError: ""
 
@@ -108,6 +122,8 @@ Singleton {
 
     signal created(int number)
     signal deleted(int number)
+    signal cleaned(int count)
+    signal rolledBack(int number)
     signal actionFinished(bool ok, string message)
 
     // --- Hulpfuncties -----------------------------------------------------
@@ -130,9 +146,13 @@ Singleton {
         const text = String(detail || "").toLowerCase()
         return text.indexOf("toegang") >= 0
             || text.indexOf("rechten") >= 0
+            || text.indexOf("bevoegdheid") >= 0
+            || text.indexOf("autorisatie") >= 0
             || text.indexOf("permission") >= 0
             || text.indexOf("no_permissions") >= 0
             || text.indexOf("not permitted") >= 0
+            || text.indexOf("not authorized") >= 0
+            || text.indexOf("authentication") >= 0
             || text.indexOf("access denied") >= 0
             || text.indexOf("niet gemachtigd") >= 0
     }
@@ -248,6 +268,26 @@ Singleton {
             return b.number - a.number
         })
 
+        return result
+    }
+
+    // Geeft de nummers van de oudste momentopnamen die weg mogen om binnen
+    // `max` momentopnamen te blijven. De lijst is nieuwste-eerst, dus alles
+    // vanaf `max` is kandidaat. Standaard- en actieve momentopnamen laat
+    // snapper niet verwijderen en worden hier overgeslagen.
+    function cleanupCandidates(max) {
+        const result = []
+        const requested = Number(max)
+        if (!isFinite(requested) || requested < 0)
+            return result
+
+        const limit = Math.floor(requested)
+        for (let i = limit; i < root.snapshots.length; i++) {
+            const snapshot = root.snapshots[i]
+            if (!snapshot || snapshot.isDefault || snapshot.isActive)
+                continue
+            result.push(snapshot.number)
+        }
         return result
     }
 
@@ -378,8 +418,10 @@ Singleton {
         return value.length > 0 ? value.split(/\s+/) : []
     }
 
-    function commandForAction(args) {
-        if (root.hasAccess)
+    function commandForAction(args, elevate) {
+        const useElevation = typeof elevate === "boolean"
+            ? elevate : !root.hasAccess
+        if (!useElevation)
             return [root.snapperBin].concat(args)
         return root.elevationPrefix().concat([root.snapperBin], args)
     }
@@ -398,7 +440,9 @@ Singleton {
         root.actionError = ""
         root.pendingAction = "create"
         root.pendingNumber = -1
+        root.pendingNumbers = []
         root.pendingDescription = desc
+        root.pendingElevated = !root.hasAccess
 
         const args = ["--config", root.activeConfig, "create", "--print-number"]
         if (desc.length > 0)
@@ -424,7 +468,9 @@ Singleton {
         root.actionError = ""
         root.pendingAction = "delete"
         root.pendingNumber = value
+        root.pendingNumbers = []
         root.pendingDescription = ""
+        root.pendingElevated = !root.hasAccess
 
         actionProcess.command = root.commandForAction([
             "--config", root.activeConfig, "delete", "--sync", String(value)
@@ -434,16 +480,109 @@ Singleton {
         return true
     }
 
+    // Verwijdert de oudste momentopnamen tot er maximaal `max` overblijven.
+    // De selectie komt uit cleanupCandidates(), zodat standaard- en actieve
+    // momentopnamen nooit worden meegestuurd.
+    function cleanup(max) {
+        if (root.busy || !root.available || root.activeConfig.length === 0)
+            return false
+
+        const requested = (max === undefined || max === null)
+            ? root.cleanupLimit : Number(max)
+        if (!isFinite(requested) || requested < 0)
+            return false
+
+        const limit = Math.floor(requested)
+        const numbers = root.cleanupCandidates(limit)
+
+        if (numbers.length === 0) {
+            const message = "Niets op te ruimen (max " + limit + ")"
+            root.lastError = ""
+            root.lastAction = message
+            root.actionFinished(true, message)
+            return false
+        }
+
+        root.busy = true
+        root.lastError = ""
+        root.lastAction = ""
+        root.actionOutput = ""
+        root.actionError = ""
+        root.pendingAction = "cleanup"
+        root.pendingNumber = limit
+        root.pendingNumbers = numbers
+        root.pendingDescription = ""
+        root.pendingElevated = !root.hasAccess
+
+        const args = ["--config", root.activeConfig, "delete", "--sync"]
+        for (let i = 0; i < numbers.length; i++)
+            args.push(String(numbers[i]))
+
+        actionProcess.command = root.commandForAction(args)
+        actionProcess.running = true
+        actionGuardTimer.restart()
+        return true
+    }
+
+    function startRollback(elevated) {
+        root.pendingElevated = elevated
+        root.actionOutput = ""
+        root.actionError = ""
+        actionProcess.command = root.commandForAction([
+            "--config", root.activeConfig,
+            "rollback", "--print-number", String(root.pendingNumber)
+        ], elevated)
+        actionProcess.running = true
+        actionGuardTimer.restart()
+    }
+
+    // Rollback maakt nieuwe momentopnamen en wijzigt de standaard-subvolume;
+    // de wijziging wordt pas actief na een herstart. Als de eerste poging
+    // zonder elevatie op rechten stuit, probeert finishAction het eenmalig
+    // opnieuw via pkexec/SNAPPER_ELEVATE.
+    function rollback(number) {
+        const value = Number(number)
+        if (root.busy || !root.available || root.activeConfig.length === 0)
+            return false
+        if (!root.rollbackSupported || !isFinite(value) || value <= 0)
+            return false
+
+        root.busy = true
+        root.lastError = ""
+        root.lastAction = ""
+        root.actionOutput = ""
+        root.actionError = ""
+        root.pendingAction = "rollback"
+        root.pendingNumber = value
+        root.pendingNumbers = []
+        root.pendingDescription = ""
+        root.pendingElevated = !root.hasAccess
+
+        root.startRollback(!root.hasAccess)
+        return true
+    }
+
     function finishAction(exitCode) {
         actionGuardTimer.stop()
         const action = root.pendingAction
         const number = root.pendingNumber
+        const count = root.pendingNumbers.length
         const detail = root.cleanError(root.actionError, root.actionOutput)
+
+        // Rollback is normaal gesproken een root-actie. Lukt de directe
+        // poging niet door rechten, probeer het dan eenmalig met elevatie.
+        if (exitCode !== 0 && action === "rollback"
+                && !root.pendingElevated && root.isPermissionError(detail)) {
+            root.startRollback(true)
+            return
+        }
 
         root.busy = false
         root.pendingAction = ""
         root.pendingNumber = -1
+        root.pendingNumbers = []
         root.pendingDescription = ""
+        root.pendingElevated = false
 
         if (exitCode === 0) {
             let message = ""
@@ -461,6 +600,21 @@ Singleton {
                 message = "Momentopname #" + number + " verwijderd"
                 root.lastAction = message
                 root.deleted(number)
+            } else if (action === "cleanup") {
+                message = count + (count === 1
+                    ? " momentopname opgeruimd (max " : " momentopnamen opgeruimd (max ")
+                    + number + ")"
+                root.lastAction = message
+                root.cleaned(count)
+            } else if (action === "rollback") {
+                const match = root.actionOutput.trim().match(/(\d+)/)
+                const newNumber = match ? parseInt(match[1], 10) : -1
+                message = "Rollback naar #" + number + " voorbereid"
+                    + (newNumber > 0
+                        ? " (nieuwe momentopname #" + newNumber + ")" : "")
+                    + " — herstart om te activeren"
+                root.lastAction = message
+                root.rolledBack(number)
             } else {
                 message = "Actie voltooid"
                 root.lastAction = message
@@ -497,8 +651,11 @@ Singleton {
             updatedLabel: root.updatedLabel(),
             activeConfig: root.activeConfig,
             subvolume: root.activeSubvolume,
+            rollbackSupported: root.rollbackSupported,
             configs: root.configs,
             count: root.snapshotCount,
+            cleanupLimit: root.cleanupLimit,
+            cleanupCount: root.cleanupCount,
             snapshots: root.snapshots,
             bin: root.snapperBin,
             elevate: root.elevationPrefix().join(" "),
@@ -698,7 +855,9 @@ Singleton {
             root.busy = false
             root.pendingAction = ""
             root.pendingNumber = -1
+            root.pendingNumbers = []
             root.pendingDescription = ""
+            root.pendingElevated = false
             root.lastError = message
             root.actionFinished(false, message)
         }
