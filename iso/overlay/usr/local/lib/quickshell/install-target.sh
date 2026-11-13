@@ -92,6 +92,31 @@ if command -v snapper >/dev/null 2>&1; then
     chmod 640 /etc/snapper/configs/root 2>/dev/null || true
     chmod 750 /.snapshots 2>/dev/null || true
     setfacl -m "u:$TARGET_USER:rx" /.snapshots 2>/dev/null || true
+
+    # Debian leest de lijst met configuraties uit /etc/default/snapper
+    # (SNAPPER_CONFIGS). Het bestand in /etc/snapper/configs alleen is niet
+    # genoeg: zonder registratie kent snapper de configuratie niet en blijft
+    # `snapper list-configs` leeg. De eerste vermelding in het bestand telt,
+    # dus vervangen we die regel in plaats van een tweede toe te voegen.
+    if [ -f /etc/default/snapper ]; then
+        current=$(sed -n 's/^SNAPPER_CONFIGS="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' \
+            /etc/default/snapper | head -n 1)
+    else
+        mkdir -p /etc/default
+        current=""
+    fi
+    case " $current " in
+        *" root "*) ;;
+        *)
+            names="${current:+$current }root"
+            if grep -q '^SNAPPER_CONFIGS=' /etc/default/snapper 2>/dev/null; then
+                sed -i "s/^SNAPPER_CONFIGS=.*/SNAPPER_CONFIGS=\"$names\"/" \
+                    /etc/default/snapper
+            else
+                printf 'SNAPPER_CONFIGS="%s"\n' "$names" >>/etc/default/snapper
+            fi
+            ;;
+    esac
 fi
 
 # --- Displaymanager: SDDM is de standaard --------------------------------

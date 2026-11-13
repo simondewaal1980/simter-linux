@@ -1157,7 +1157,8 @@ iso/
 - [x] Een installatie op een lege 24 GiB virtuele schijf levert:
       `findmnt /` met `subvol=/@rootfs` en de juiste mountopties;
       `btrfs subvolume list /` met `@rootfs` en `.snapshots`;
-      `snapper`-configuratie `root` met `ALLOW_USERS` en `SYNC_ACL`;
+      `snapper`-configuratie `root` met `ALLOW_USERS` en `SYNC_ACL`, en
+      geregistreerd in `/etc/default/snapper` (`SNAPPER_CONFIGS="root"`);
       `grub.cfg` met `rootflags=subvol=@rootfs`;
       SDDM als displaymanager en de bspwm-sessie als standaard.
 - [x] Na de eerste login start de Quickshell-bar met workspaces, klok, weer,
@@ -1165,6 +1166,13 @@ iso/
 - [x] `Super+/` (sneltoetsenoverzicht, 71 bindingen), `Super+Shift+S`
       (BSPWM-instellingen), een D-Bus-notificatie (popup + badge) en de
       Snapper-teller in de bar getest op de geïnstalleerde schijf.
+- [x] Snapper werkt als de gekozen gebruiker (`snapper list-configs` toont
+      `root`, zonder sudo); de popup toont de momentopname en de knoppen voor
+      aanmaken, verwijderen, opruimen en rollback. Zonder de registratie in
+      `/etc/default/snapper` bleef de lijst leeg, ook al stond het
+      configuratiebestand er wel.
+- [x] De QEMU-test is onder bspwm met een zwevend venster van 1280×800
+      uitgevoerd; in een betegeld venster past het Calamares-venster niet.
 
 **Klaar als:** de ISO op echte hardware of in QEMU installeert en het
 geïnstalleerde systeem dezelfde BTRFS-root, snapper-configuratie en

@@ -63,6 +63,8 @@ Debian-sid-desktop wordt in een chroot geïnstalleerd en gecomprimeerd).
    - schrijft de Debian-sid-bron;
    - controleert/herstelt GRUB (`rootflags=subvol=@rootfs` via update-grub);
    - maakt de snapper-configuratie en `/.snapshots`;
+   - registreert die configuratie in `/etc/default/snapper`
+     (`SNAPPER_CONFIGS="root"`), want zonder die regel kent snapper hem niet;
    - zet `ALLOW_USERS` en de ACL;
    - schakelt SDDM, NetworkManager, bluetooth, snapper-timers en fstrim in;
    - draait `quickshell-user-setup` voor de nieuwe gebruiker.
@@ -77,7 +79,8 @@ iso/test-qemu.sh                        # UEFI-VM met lege 24 GiB-schijf
 
 In de VM start Calamares automatisch. Kies in de partitioneringsstap
 "Schijf wissen" (het BTRFS-rootformaat staat al voor), vul een gebruiker in
-en installeer. Na de installatie kun je de qcow2 offline controleren:
+en installeer. Onder bspwm wordt het QEMU-venster betegeld; maak het zwevend
+en minstens 1280×800, anders past het Calamares-venster niet op het scherm. Na de installatie kun je de qcow2 offline controleren:
 
 ```bash
 sudo qemu-nbd --connect=/dev/nbd0 iso/test/disk.qcow2
@@ -86,6 +89,7 @@ findmnt -no OPTIONS /mnt
 sudo btrfs subvolume list /mnt
 sudo cat /mnt/etc/fstab
 sudo cat /mnt/boot/grub/grub.cfg | grep rootflags
+grep SNAPPER_CONFIGS /mnt/etc/default/snapper
 sudo chroot /mnt snapper -c root list
 sudo umount /mnt
 sudo qemu-nbd --disconnect /dev/nbd0
@@ -109,7 +113,9 @@ De referentie-ISO is in QEMU met OVMF (UEFI) getest:
   de Quickshell-bar.
 - Snapper-configuratie `root` staat klaar met `ALLOW_USERS` voor de gekozen
   gebruiker en `SYNC_ACL=yes`; `/.snapshots` is een geneste subvolume met de
-  juiste ACL.
+  juiste ACL. De configuratie is in `/etc/default/snapper` geregistreerd, dus
+  `snapper list-configs` en de widget zien hem; zonder registratie bleef de
+  lijst leeg.
 - Op de geïnstalleerde schijf zijn `Super+/` (71 bindingen),
   `Super+Shift+S` (BSPWM-instellingen) en een D-Bus-notificatie (popup +
   badge) getest; de Snapper-teller staat in de bar.

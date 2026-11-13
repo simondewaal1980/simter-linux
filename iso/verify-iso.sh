@@ -113,6 +113,16 @@ grep -q 'btrfs' "$TMP/partition.conf" && echo "OK   BTRFS-standaard" || {
     failures=$((failures + 1))
 }
 
+echo "== Snapper-registratie =="
+if unsquashfs -cat "$TMP/filesystem.squashfs" \
+        usr/local/lib/quickshell/install-target.sh 2>/dev/null \
+        | grep -q 'SNAPPER_CONFIGS'; then
+    echo "OK   install-target registreert de configuratie in /etc/default/snapper"
+else
+    echo "FOUT install-target registreert SNAPPER_CONFIGS niet" >&2
+    failures=$((failures + 1))
+fi
+
 if [ "$failures" -ne 0 ]; then
     echo "verify-iso: $failures controle(s) mislukt" >&2
     exit 1
