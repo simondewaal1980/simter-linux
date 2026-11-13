@@ -113,6 +113,18 @@ for tool in lb debootstrap mksquashfs xorriso rsync convert; do
     need "$tool"
 done
 
+# De ISO en de meegebundelde matugen-binary zijn amd64.
+if command -v dpkg >/dev/null 2>&1 && [ "$(dpkg --print-architecture 2>/dev/null)" != amd64 ]; then
+    echo "build.sh: waarschuwing: deze host is $(dpkg --print-architecture), maar de ISO is amd64." >&2
+    echo "Op een andere architectuur is qemu-binfmt nodig; de build kan hierdoor mislukken." >&2
+fi
+
+# live-build gebruikt veel ruimte voor de chroot, squashfs en de ISO zelf.
+AVAIL_KB=$(df -Pk "$ISO_DIR" | awk 'NR==2 {print $4}')
+if [ -n "$AVAIL_KB" ] && [ "$AVAIL_KB" -lt 12582912 ]; then
+    echo "build.sh: waarschuwing: minder dan 12 GiB vrij op $(df -Pk "$ISO_DIR" | awk 'NR==2 {print $6}')." >&2
+fi
+
 # Bewaar de live-build-pakketcache tussen builds; dat scheelt bij een
 # herstart veel download- en debootstrap-tijd. Doe dit vóór de matugen- en
 # wallpaper-stappen, want die kunnen iso/cache al aanmaken.
@@ -228,11 +240,32 @@ cd "$BUILD_DIR"
 sh auto/config
 
 echo "== ISO bouwen (dit kan lang duren) =="
-lb build 2>&1 | tee "$LOG"
+# Laat lb via een FIFO naar tee lopen: de voortgang blijft zichtbaar én het
+# script houdt de echte exitstatus van lb. Met `lb build | tee` is de
+# pijpstatus die van tee, waardoor een fout alleen als "geen ISO gevonden"
+# zichtbaar werd.
+rm -f "$LOG.fifo"
+mkfifo "$LOG.fifo" || {
+    echo "build.sh: kan geen fifo maken voor $LOG.fifo." >&2
+    exit 1
+}
+trap 'rm -f "$LOG.fifo"' EXIT INT TERM
+tee "$LOG" <"$LOG.fifo" &
+TEE_PID=$!
+LB_STATUS=0
+lb build >"$LOG.fifo" 2>&1 || LB_STATUS=$?
+wait "$TEE_PID" 2>/dev/null || true
+rm -f "$LOG.fifo"
+trap - EXIT INT TERM
+if [ "$LB_STATUS" -ne 0 ]; then
+    echo "build.sh: lb build is mislukt (exit $LB_STATUS). Laatste regels uit $LOG:" >&2
+    tail -n 60 "$LOG" >&2 2>/dev/null || true
+    exit "$LB_STATUS"
+fi
 
 ISO=$(find "$BUILD_DIR" -maxdepth 1 -type f \( -name '*.hybrid.iso' -o -name '*.iso' \) | head -n 1)
 [ -n "$ISO" ] || {
-    echo "build.sh: geen ISO gevonden in $BUILD_DIR" >&2
+    echo "build.sh: geen ISO gevonden in $BUILD_DIR; controleer $LOG." >&2
     exit 1
 }
 

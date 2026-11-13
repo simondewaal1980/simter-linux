@@ -67,6 +67,15 @@ die onderdelen.
 - **`sha256 van matugen klopt niet`** — verwijder
   `iso/cache/matugen-*` en probeer opnieuw, of zet `MATUGEN_SHA256` leeg als
   je bewust een andere versie gebruikt.
+- **`lb build is mislukt` of `geen ISO gevonden`** — het script toont nu de
+  laatste 60 regels van `iso/build.log`. Controleer verder:
+  - minimaal ~12 GiB vrije ruimte op de schijf van de repo (chroot, squashfs
+    en ISO);
+  - een amd64-host; op arm64 is qemu-binfmt nodig;
+  - `live-build` uit Debian sid/testing. Een oudere versie (bijvoorbeeld uit
+    Ubuntu of bookworm) kent niet alle opties in `iso/live-build/auto/config`;
+  - genoeg rechten: live-build moet kunnen mounten en chrooten. In een
+    container of WSL zonder die rechten stopt de build in de log.
 
 ## Wat er in de live-omgeving zit
 
