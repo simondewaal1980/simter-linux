@@ -25,10 +25,19 @@ sudo apt install live-build debootstrap squashfs-tools xorriso \
   imagemagick
 ```
 
-Matugen staat niet in Debian. Het buildscript gebruikt
-`~/.local/bin/matugen` (of `MATUGEN_BIN=...`). De wallpaper komt uit
-`~/Pictures/wallpaper.jpg` en de map `~/Pictures/Wallpapers`; beide zijn
-overschrijfbaar met `WALLPAPER=...` en `WALLPAPER_DIR=...`.
+Matugen staat niet in Debian. Het buildscript zoekt eerst een bestaande
+binary (`MATUGEN_BIN=...`, `~/.local/bin/matugen`, `/usr/local/bin`) en haalt
+anders automatisch de officiële release (standaard 4.2.0) naar
+`iso/cache/matugen-<versie>/`. Die download is eenmalig en wordt met de
+meegeleverde sha256 gecontroleerd. Een andere versie of URL kan met
+`MATUGEN_VERSION`, `MATUGEN_URL` en `MATUGEN_SHA256` (leeg = niet
+controleren).
+
+De wallpaper komt uit `~/Pictures/wallpaper.jpg` en de map
+`~/Pictures/Wallpapers`; beide zijn overschrijfbaar met `WALLPAPER=...` en
+`WALLPAPER_DIR=...`. Ontbreekt de wallpaper, dan pakt het script de eerste
+afbeelding uit `WALLPAPER_DIR` of genereert het een donkere
+standaardwallpaper in `iso/cache/`.
 
 ```bash
 sudo iso/build.sh
@@ -43,6 +52,21 @@ quickshell-desktop-amd64.iso.sha256
 
 Het buildlog staat in `iso/build.log`. De eerste build duurt lang (de volledige
 Debian-sid-desktop wordt in een chroot geïnstalleerd en gecomprimeerd).
+`iso/cache/` bewaart zowel de live-build-pakketten als de gedownloade
+matugen-binary, zodat een volgende build geen netwerk meer nodig heeft voor
+die onderdelen.
+
+## Problemen oplossen
+
+- **`matugen niet gevonden`** — het script downloadt matugen nu zelf. Lukt
+  dat niet (geen netwerk, proxy), installeer de release dan handmatig in
+  `~/.local/bin` of geef `sudo MATUGEN_BIN=/pad/naar/matugen iso/build.sh`
+  mee. Controleer bij een handmatige binary dat hij voor amd64 is.
+- **`libssl`/`GLIBC`-fout bij matugen in de live-omgeving** — gebruik de
+  officiële x86_64-release; die is tegen de Debian-sid-bibliotheken gebouwd.
+- **`sha256 van matugen klopt niet`** — verwijder
+  `iso/cache/matugen-*` en probeer opnieuw, of zet `MATUGEN_SHA256` leeg als
+  je bewust een andere versie gebruikt.
 
 ## Wat er in de live-omgeving zit
 

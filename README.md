@@ -53,8 +53,10 @@ Het project staat in het geïnstalleerde systeem in `/opt/quickshell`; de
 gebruiker krijgt `~/projecten/quickshell` als symlink, zodat de bestaande
 paden in `sxhkdrc`, Quickshell en de matugen-post-hook blijven werken.
 Persoonlijke bestanden en Google Chrome gaan niet mee; matugen en de
-meegeleverde wallpapers wel. Zie `iso/README.md` voor de builddetails en
-`PLAN.md` (aanvullende fase) voor de ontwerpkeuzes.
+meegeleverde wallpapers wel. Ontbreekt matugen op de buildmachine, dan haalt
+`iso/build.sh` de officiële release eenmalig naar `iso/cache/`; een bestaande
+binary is met `MATUGEN_BIN=...` te kiezen. Zie `iso/README.md` voor de
+builddetails en `PLAN.md` (aanvullende fase) voor de ontwerpkeuzes.
 
 ## Vereisten
 
