@@ -90,10 +90,6 @@ network-manager
 network-manager-applet
 nftables
 nm-tray
-nvidia-detect
-nvidia-driver
-nvidia-settings
-nvidia-smi
 openssh-client
 openssl-provider-legacy
 os-prober

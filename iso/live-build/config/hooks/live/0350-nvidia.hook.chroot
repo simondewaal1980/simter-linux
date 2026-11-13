@@ -1,31 +1,87 @@
 #!/bin/sh
-# Controleer dat de NVIDIA-kernelmodule echt voor de ISO-kernel is gebouwd.
+# Installeer de NVIDIA-driver in een aparte, niet-fatale stap.
 #
-# nvidia-driver installeert nvidia-kernel-dkms. DKMS bouwt de module tijdens
-# de pakketinstallatie in de chroot; op een buildmachine zonder NVIDIA-GPU
-# gebeurt dat gewoon uit de bron. Zonder deze controle zou een mislukte
-# DKMS-build pas op de doelcomputer blijken.
-set -e
+# normaal zit nvidia-driver in de pakketlijst, maar de DKMS-build is fragiel:
+# op een Ubuntu-buildhost met weinig RAM of een afwijkende kernel kan de
+# postinst van nvidia-kernel-dkms met exit 1 stoppen en daarmee de hele
+# ISO-build afbreken. Daarom installeren we de driver hier na de
+# hoofdinstallatie. Lukt het niet, dan blijft de ISO bruikbaar met Mesa
+# (en nouveau op NVIDIA-hardware); de fout staat duidelijk in het buildlog.
+set -u
 
-if ! ls /lib/modules/*/updates/dkms/nvidia-current.ko* >/dev/null 2>&1; then
-    echo "0350-nvidia: geen NVIDIA-module gevonden; dkms autoinstall proberen." >&2
-    # Niet simpelweg `dkms autoinstall` gebruiken: in een chroot is uname -r
-    # de kernel van de host, die niet in /lib/modules hoeft te staan. Bouw
-    # daarom expliciet voor elke geïnstalleerde kernel met headers.
+MODULE=nvidia-current
+DKMS=/usr/sbin/dkms
+VERSION=
+
+log() {
+    printf '%s\n' "$*" >&2
+}
+
+module_present() {
+    ls /lib/modules/*/updates/dkms/nvidia-current.ko* >/dev/null 2>&1
+}
+
+# --- 1. Driverpakketten ----------------------------------------------------
+if ! dpkg-query -W -f='${Status}' nvidia-driver 2>/dev/null \
+        | grep -q 'install ok installed'; then
+    log "== NVIDIA-driver installeren (aparte stap) =="
+    DEBIAN_FRONTEND=noninteractive apt-get update -q || true
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            --no-install-recommends \
+            nvidia-driver nvidia-smi nvidia-settings nvidia-detect \
+            libnvidia-cfg1; then
+        log "WAARSCHUWING: NVIDIA-driver installeren is mislukt."
+        log "De ISO bouwt door met Mesa/nouveau; zie de DKMS-regels hierboven."
+        DEBIAN_FRONTEND=noninteractive apt-get -f install -y || true
+    fi
+else
+    log "NVIDIA-driver is al geïnstalleerd."
+fi
+
+# --- 2. Kernelmodule -------------------------------------------------------
+if ! module_present; then
+    log "NVIDIA-kernelmodule ontbreekt; proberen te bouwen."
+
+    # Versie uit de DKMS-administratie of anders uit de bron.
+    VERSION=$(find "/var/lib/dkms/$MODULE" -mindepth 1 -maxdepth 1 \
+        -type d -printf '%f\n' 2>/dev/null | head -n 1)
+    if [ -z "$VERSION" ]; then
+        for src in /usr/src/$MODULE-*; do
+            [ -r "$src/dkms.conf" ] || continue
+            VERSION=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' \
+                "$src/dkms.conf" | head -n 1)
+            [ -n "$VERSION" ] && break
+        done
+        if [ -n "$VERSION" ]; then
+            "$DKMS" add -m "$MODULE" -v "$VERSION" || true
+        fi
+    fi
+
+    # In een chroot is uname -r de kernel van de buildhost. Bouw daarom
+    # expliciet voor elke geïnstalleerde kernel met headers.
     for kernel in /lib/modules/*; do
         [ -d "$kernel/build" ] || continue
-        dkms autoinstall -k "$(basename "$kernel")" || true
+        k=$(basename "$kernel")
+        log "NVIDIA-module bouwen voor $k"
+        if ! "$DKMS" autoinstall -k "$k"; then
+            log "DKMS-build voor $k mislukt; laatste make.log-regels:"
+            if [ -n "$VERSION" ]; then
+                tail -n 40 "/var/lib/dkms/$MODULE/$VERSION/build/make.log" \
+                    >&2 2>/dev/null || true
+            fi
+        fi
     done
 fi
 
-if ! ls /lib/modules/*/updates/dkms/nvidia-current.ko* >/dev/null 2>&1; then
-    echo "0350-nvidia: NVIDIA-kernelmodule ontbreekt in /lib/modules." >&2
-    echo "Controleer of linux-headers-amd64 en nvidia-kernel-dkms zijn geïnstalleerd." >&2
-    exit 1
+# --- 3. Resultaat ----------------------------------------------------------
+if module_present; then
+    depmod -a
+    log "NVIDIA-kernelmodule aanwezig."
+else
+    log "WAARSCHUWING: NVIDIA-kernelmodule ontbreekt."
+    log "De ISO start met Mesa/nouveau. Op een NVIDIA-desktop kun je later"
+    log "'sudo apt install --reinstall nvidia-kernel-dkms' uitvoeren."
 fi
 
-# De module is niet nodig in de initramfs, maar depmod moet hem wel kennen
-# zodat udev hem op een NVIDIA-GPU kan laden.
-depmod -a
-
+# Nooit de hele ISO-build laten mislukken door alleen de NVIDIA-stap.
 exit 0

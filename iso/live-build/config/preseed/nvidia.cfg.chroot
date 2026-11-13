@@ -1,0 +1,4 @@
+# Voorkom dat nvidia-legacy-check de ISO-build afbreekt op een buildhost met
+# een oude NVIDIA-GPU. De ISO bevat de huidige driver; op niet-ondersteunde
+# hardware kiest quickshell-gpu-setup automatisch Mesa/nouveau.
+nvidia-driver/check-for-unsupported-gpu boolean false

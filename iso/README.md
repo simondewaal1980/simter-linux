@@ -81,7 +81,12 @@ kan installeren. De build heeft daarvoor eenmalig toegang tot
 `dl.google.com` nodig; de pakketten zelf worden daarna in `iso/cache/`
 bewaard. De NVIDIA-driver komt uit `non-free` en wordt tijdens de build met
 DKMS gecompileerd; ook daarvoor is geen NVIDIA-hardware in de buildmachine
-nodig.
+nodig. De driver wordt in een aparte, niet-fatale chroot-stap geïnstalleerd
+(`0350-nvidia`). Daardoor stopt een Ubuntu-build niet meer als de
+DKMS-compilatie op die machine mislukt: de ISO bouwt door met Mesa/nouveau en
+het buildlog bevat de reden. `parallel_jobs=2` in
+`overlay/etc/dkms/framework.conf.d/quickshell.conf` voorkomt daarnaast
+geheugengebrek op kleine build-VM's.
 
 De wallpaper komt uit `~/Pictures/wallpaper.jpg` en de map
 `~/Pictures/Wallpapers`; beide zijn overschrijfbaar met `WALLPAPER=...` en
@@ -131,10 +136,13 @@ die onderdelen.
   (met APT-handtekening), omdat ca-certificates in de bootstrap-chroot nog
   niet aanwezig is.
 - **`0350-nvidia: NVIDIA-kernelmodule ontbreekt`** — DKMS kon de module niet
-  bouwen. Zoek in `iso/build.log` naar de fout van `nvidia-kernel-dkms`; vaak
-  ontbreken de kernelheaders of is de NVIDIA-driver te oud voor de
-  kernelversie in sid. De build stopt dan bewust, zodat je geen ISO krijgt
-  die op een NVIDIA-desktop zonder driver start.
+  bouwen. De ISO-build gaat nu door en gebruikt Mesa/nouveau; zoek in
+  `iso/build.log` naar de fout van `nvidia-kernel-dkms` om de driver alsnog
+  te laten werken. Vaak is er te weinig RAM (zet `parallel_jobs=1` in
+  `overlay/etc/dkms/framework.conf.d/quickshell.conf`), ontbreken de
+  kernelheaders of is de NVIDIA-driver te oud voor de kernelversie in sid.
+  Op de doel-PC kun je later `sudo apt install --reinstall
+  nvidia-kernel-dkms` uitvoeren.
 
 ## Wat er in de live-omgeving zit
 
@@ -275,8 +283,12 @@ niet-vrije onderdelen:
   bouwen; zeer nieuwe GPU's kunnen een nieuwere driver nodig hebben.
 
 De buildmachine hoeft geen NVIDIA-GPU te hebben: DKMS compileert de module
-uit de bron voor de kernel in de ISO. De hook `0350-nvidia` controleert na de
-pakketinstallatie of de module echt gebouwd is en laat de build anders falen.
+uit de bron voor de kernel in de ISO. De hook `0350-nvidia` installeert de
+driver in een aparte stap en probeert de module voor elke geïnstalleerde
+kernel te bouwen. Lukt dat niet, dan waarschuwt de hook en bouwt de ISO door
+met Mesa/nouveau; `0350-nvidia` laat de build dus niet meer met exit 1
+stoppen. `iso/verify-iso.sh` meldt in dat geval een waarschuwing in plaats
+van een fout.
 
 Bij het opstarten kiest `quickshell-gpu-setup.service` de GLX-implementatie:
 

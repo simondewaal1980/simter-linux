@@ -56,6 +56,36 @@ need() {
     }
 }
 
+# Verwijder de buildmap, maar eerst eventuele achtergebleven mounts.
+# Na een afgebroken build kunnen /dev, /proc of /sys nog onder de chroot
+# hangen. Een kale rm -rf loopt dan door een bind-mount van bijvoorbeeld de
+# host-/dev en kan apparaatnodes weggooien. Dat mag nooit gebeuren.
+cleanup_build_dir() {
+    [ -d "$BUILD_DIR" ] || return 0
+
+    if command -v findmnt >/dev/null 2>&1; then
+        findmnt -R -n -o TARGET "$BUILD_DIR" 2>/dev/null \
+            | sort -r \
+            | while IFS= read -r target; do
+                [ -n "$target" ] || continue
+                umount "$target" 2>/dev/null \
+                    || umount -l "$target" 2>/dev/null \
+                    || true
+            done
+
+        if findmnt -R -n -o TARGET "$BUILD_DIR" 2>/dev/null | grep -q .; then
+            echo "build.sh: er hangen nog mounts onder $BUILD_DIR:" >&2
+            findmnt -R -n -o TARGET "$BUILD_DIR" >&2 2>/dev/null || true
+            echo "build.sh: unmount die eerst; de buildmap wordt niet verwijderd." >&2
+            exit 1
+        fi
+    else
+        echo "build.sh: waarschuwing: findmnt ontbreekt; controleer $BUILD_DIR op mounts." >&2
+    fi
+
+    rm -rf "$BUILD_DIR"
+}
+
 # Zoek matugen zonder meteen te falen: eerst een expliciete MATUGEN_BIN, dan
 # de gebruikelijke locaties (ook die van de aanroeper als we via sudo draaien).
 find_matugen() {
@@ -259,6 +289,8 @@ build_in_builder() {
         echo "Op een andere architectuur is qemu-binfmt nodig." >&2
     fi
     trap 'builder_cleanup' EXIT INT TERM
+    # Ruim mounts van een vorige, afgebroken build op voordat we nieuwe maken.
+    builder_cleanup
     stage_chroot_inputs
     bootstrap_builder
     builder_mounts
@@ -393,7 +425,7 @@ fi
 echo "wallpaper: $WALLPAPER"
 
 echo "== Buildmap voorbereiden =="
-rm -rf "$BUILD_DIR"
+cleanup_build_dir
 mkdir -p "$BUILD_DIR" "$OUT_DIR" "$CACHE_DIR"
 cp -a "$ISO_DIR/live-build/." "$BUILD_DIR/"
 ln -s "$CACHE_DIR" "$BUILD_DIR/cache"
@@ -491,7 +523,10 @@ ISO=$(find "$BUILD_DIR" -maxdepth 1 -type f \( -name '*.hybrid.iso' -o -name '*.
 }
 
 TARGET=$OUT_DIR/quickshell-desktop-amd64.iso
-cp "$ISO" "$TARGET"
+# Verplaatsen in plaats van kopiëren: iso/build en iso/out zitten op dezelfde
+# schijf, dus dit kost geen extra ruimte. Met weinig vrije schijfruimte is
+# een tweede kopie van bijna 3 GiB net het verschil tussen slagen en falen.
+mv -f "$ISO" "$TARGET"
 chown "$RUN_USER:$RUN_USER" "$TARGET" "$LOG" 2>/dev/null || true
 (cd "$OUT_DIR" && sha256sum "$(basename "$TARGET")" >"$(basename "$TARGET").sha256")
 chown "$RUN_USER:$RUN_USER" "$TARGET.sha256" 2>/dev/null || true

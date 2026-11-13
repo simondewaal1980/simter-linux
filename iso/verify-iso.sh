@@ -72,7 +72,6 @@ check "/etc/xdg/mimeapps.list"
 check "/etc/opt/chrome/policies/managed/quickshell.json"
 check "/usr/local/bin/quickshell-gpu-setup"
 check "/etc/systemd/system/multi-user.target.wants/quickshell-gpu-setup.service"
-check "/usr/bin/nvidia-smi"
 check "/usr/bin/vainfo"
 
 echo "== Displaymanager en GLX =="
@@ -99,14 +98,17 @@ echo "== NVIDIA en Mesa =="
 if grep -qE 'squashfs-root/(usr/)?lib/modules/.*/updates/dkms/nvidia-current\.ko' "$TMP/list.txt"; then
     echo "OK   NVIDIA-kernelmodule aanwezig"
 else
-    echo "FOUT NVIDIA-kernelmodule ontbreekt" >&2
-    failures=$((failures + 1))
+    echo "WAARSCHUWING NVIDIA-kernelmodule ontbreekt; de ISO gebruikt Mesa/nouveau." >&2
 fi
 if grep -qE 'squashfs-root/usr/lib/x86_64-linux-gnu/(nvidia/current/)?libGLX_nvidia\.so\.0' "$TMP/list.txt"; then
     echo "OK   NVIDIA-GLX-bibliotheek aanwezig"
 else
-    echo "FOUT NVIDIA-GLX-bibliotheek ontbreekt" >&2
-    failures=$((failures + 1))
+    echo "WAARSCHUWING NVIDIA-GLX-bibliotheek ontbreekt; de ISO gebruikt Mesa." >&2
+fi
+if grep -qx 'squashfs-root/usr/bin/nvidia-smi' "$TMP/list.txt"; then
+    echo "OK   nvidia-smi aanwezig"
+else
+    echo "WAARSCHUWING nvidia-smi ontbreekt; NVIDIA-driver is niet meegeleverd." >&2
 fi
 if grep -q 'squashfs-root/usr/lib/mesa-diverted' "$TMP/list.txt"; then
     echo "OK   Mesa-terugval aanwezig"
