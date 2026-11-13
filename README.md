@@ -36,6 +36,18 @@ Naast handmatige installatie is er een reproduceerbare installatie-ISO:
 sudo iso/build.sh
 ```
 
+Op Debian sid/testing bouwt het script native. Op **Ubuntu** (of een andere
+distributie) is de meegeleverde `live-build` te oud; `iso/build.sh` maakt dan
+eenmalig een Debian-sid-omgeving met `debootstrap` en bouwt daarin:
+
+```bash
+sudo apt install debootstrap debian-archive-keyring
+sudo iso/build.sh
+```
+
+De omgeving staat in `/var/cache/quickshell-iso/builder-sid` en wordt
+hergebruikt. Zie `iso/README.md` voor de variabelen en het opruimen.
+
 De ISO komt in `iso/out/quickshell-desktop-amd64.iso` (met `.sha256`). Hij
 boot op BIOS en UEFI in een LXQt-live-sessie en start Calamares automatisch.
 De installer schrijft dezelfde BTRFS-indeling als de bronmachine:

@@ -10,6 +10,10 @@
 # meegebundeld; ontbreekt de binary, dan haalt dit script de officiële release
 # één keer naar iso/cache. De bron blijft het project in deze repo.
 #
+# Op Debian sid/testing wordt native gebouwd. Op Ubuntu of een andere host
+# met een te oude live-build maakt het script eenmalig een Debian-sid-
+# omgeving met debootstrap en bouwt daarin (zie iso/README.md).
+#
 # Uitvoer: iso/out/quickshell-desktop-amd64.iso + .sha256
 
 set -eu
@@ -109,6 +113,204 @@ download_matugen() {
     echo "$dest"
 }
 
+# ---------------------------------------------------------------------------
+# Bouwen vanaf Ubuntu (of een andere niet-Debian-host)
+#
+# Ubuntu levert live-build 3.0~a57 uit 2013, dat de opties in
+# iso/live-build/auto/config niet kent. In plaats van de host aan te passen
+# maakt dit script eenmalig een Debian-sid-omgeving met debootstrap en bouwt
+# daarin. De omgeving blijft bewaard, dus alleen de eerste build is traag.
+# ---------------------------------------------------------------------------
+BUILDER_DIR=${QS_BUILDER_DIR:-/var/cache/quickshell-iso/builder-sid}
+BUILDER_ROOT=$BUILDER_DIR/rootfs
+BUILDER_MARKER=$BUILDER_DIR/.ready
+BUILDER_MIRROR=${QS_BUILDER_MIRROR:-http://deb.debian.org/debian}
+BUILDER_STAGE=$CACHE_DIR/chroot-inputs
+DEBIAN_KEYRING=${QS_DEBIAN_KEYRING:-/usr/share/keyrings/debian-archive-keyring.gpg}
+BUILDER_PACKAGES="live-build debootstrap squashfs-tools xorriso rsync
+imagemagick isolinux syslinux-common syslinux-utils dosfstools mtools zstd
+grub-pc-bin grub-efi-amd64-bin grub-common fonts-jetbrains-mono
+fonts-dejavu-core ca-certificates curl wget file xz-utils cpio bzip2
+uuid-runtime bc gettext-base"
+
+# Een Debian-host met een recente live-build (epoch 1:) kan native bouwen.
+# Ubuntu's 3.0~a57 heeft die epoch niet en is te oud.
+host_can_build_native() {
+    grep -q '^ID=debian$' /etc/os-release 2>/dev/null || return 1
+    [ -r /etc/debian_version ] || return 1
+    lb_version=$(dpkg-query -W -f='${Version}' live-build 2>/dev/null || true)
+    case $lb_version in
+        1:*) return 0 ;;
+    esac
+    return 1
+}
+
+# Kopieer de wallpaper(s) van de aanroeper naar de cache, zodat de chroot ze
+# kan gebruiken zonder de hele homemap te binden.
+stage_chroot_inputs() {
+    rm -rf "$BUILDER_STAGE"
+    mkdir -p "$BUILDER_STAGE/Wallpapers"
+
+    wp=${WALLPAPER:-$RUN_HOME/Pictures/wallpaper.jpg}
+    wpdir=${WALLPAPER_DIR:-$RUN_HOME/Pictures/Wallpapers}
+
+    if [ -n "${MATUGEN_BIN:-}" ] && [ -x "$MATUGEN_BIN" ]; then
+        cp "$MATUGEN_BIN" "$BUILDER_STAGE/matugen"
+    fi
+    if [ -r "$wp" ]; then
+        cp "$wp" "$BUILDER_STAGE/wallpaper.jpg"
+    fi
+    if [ -d "$wpdir" ]; then
+        find "$wpdir" -maxdepth 1 -type f \
+            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+               -o -iname '*.webp' \) \
+            -exec cp -a {} "$BUILDER_STAGE/Wallpapers/" \;
+    fi
+}
+
+bootstrap_builder() {
+    if [ -r "$BUILDER_ROOT/etc/debian_version" ]; then
+        return 0
+    fi
+    need debootstrap
+    [ -r "$DEBIAN_KEYRING" ] || {
+        echo "build.sh: Debian-archiefsleutel ontbreekt ($DEBIAN_KEYRING)." >&2
+        echo "Installeer hem eenmalig: sudo apt install debootstrap debian-archive-keyring" >&2
+        exit 1
+    }
+    echo "== Debian-sid buildomgeving aanmaken in $BUILDER_ROOT =="
+    echo "   (eenmalig; dit downloadt ongeveer 300 MB)"
+    rm -rf "$BUILDER_ROOT"
+    mkdir -p "$BUILDER_DIR"
+    if ! debootstrap --arch=amd64 --variant=minbase \
+            --keyring="$DEBIAN_KEYRING" \
+            --include=ca-certificates,curl,debian-archive-keyring \
+            sid "$BUILDER_ROOT" "$BUILDER_MIRROR"; then
+        echo "build.sh: debootstrap van Debian sid is mislukt." >&2
+        rm -rf "$BUILDER_ROOT"
+        exit 1
+    fi
+}
+
+builder_mounts() {
+    mkdir -p "$BUILDER_ROOT/proc" "$BUILDER_ROOT/sys" "$BUILDER_ROOT/dev/pts" \
+             "$BUILDER_ROOT$REPO_DIR"
+    mountpoint -q "$BUILDER_ROOT/proc" || mount -t proc proc "$BUILDER_ROOT/proc"
+    mountpoint -q "$BUILDER_ROOT/sys" || mount -t sysfs sysfs "$BUILDER_ROOT/sys"
+    mountpoint -q "$BUILDER_ROOT/dev" || mount --rbind /dev "$BUILDER_ROOT/dev"
+    mountpoint -q "$BUILDER_ROOT/dev/pts" || mount --bind /dev/pts "$BUILDER_ROOT/dev/pts"
+    mountpoint -q "$BUILDER_ROOT$REPO_DIR" || mount --bind "$REPO_DIR" "$BUILDER_ROOT$REPO_DIR"
+}
+
+builder_cleanup() {
+    for dir in "$BUILDER_ROOT$REPO_DIR" "$BUILDER_ROOT/dev/pts" \
+               "$BUILDER_ROOT/dev" "$BUILDER_ROOT/sys" "$BUILDER_ROOT/proc"; do
+        if mountpoint -q "$dir" 2>/dev/null; then
+            umount "$dir" 2>/dev/null || umount -R "$dir" 2>/dev/null \
+                || umount -l "$dir" 2>/dev/null || true
+        fi
+    done
+}
+
+prepare_builder_packages() {
+    cp /etc/resolv.conf "$BUILDER_ROOT/etc/resolv.conf" 2>/dev/null || true
+    cat > "$BUILDER_ROOT/etc/apt/sources.list" <<EOF
+deb $BUILDER_MIRROR sid main contrib non-free non-free-firmware
+EOF
+    if [ -e "$BUILDER_MARKER" ] && [ "${QS_BUILDER_REFRESH:-0}" != 1 ]; then
+        return 0
+    fi
+    echo "== Buildpakketten in de Debian-sid-omgeving installeren =="
+    chroot "$BUILDER_ROOT" env DEBIAN_FRONTEND=noninteractive \
+        apt-get update -q || {
+        echo "build.sh: apt-get update in de buildomgeving is mislukt." >&2
+        exit 1
+    }
+    # shellcheck disable=SC2086
+    chroot "$BUILDER_ROOT" env DEBIAN_FRONTEND=noninteractive \
+        apt-get -y -q --no-install-recommends \
+        -o Dpkg::Options::=--force-confdef \
+        -o Dpkg::Options::=--force-confold \
+        install $BUILDER_PACKAGES || {
+        echo "build.sh: buildpakketten installeren in de buildomgeving is mislukt." >&2
+        exit 1
+    }
+    touch "$BUILDER_MARKER"
+}
+
+build_in_builder() {
+    command -v debootstrap >/dev/null 2>&1 || {
+        echo "build.sh: debootstrap ontbreekt; dat is nodig om de Debian-sid-omgeving te maken." >&2
+        echo "Installeer eenmalig: sudo apt install debootstrap debian-archive-keyring" >&2
+        exit 1
+    }
+    need mount umount chroot mountpoint
+    builder_arch=$(dpkg --print-architecture 2>/dev/null || uname -m)
+    if [ "$builder_arch" != amd64 ]; then
+        echo "build.sh: waarschuwing: host is $builder_arch; de Debian-sid-omgeving en ISO zijn amd64." >&2
+        echo "Op een andere architectuur is qemu-binfmt nodig." >&2
+    fi
+    trap 'builder_cleanup' EXIT INT TERM
+    stage_chroot_inputs
+    bootstrap_builder
+    builder_mounts
+    prepare_builder_packages
+
+    echo "== Bouwen in de Debian-sid-omgeving ($BUILDER_ROOT) =="
+    if [ -x "$BUILDER_STAGE/matugen" ]; then
+        MATUGEN_IN_CHROOT=$BUILDER_STAGE/matugen
+    else
+        MATUGEN_IN_CHROOT=
+    fi
+    status=0
+    chroot "$BUILDER_ROOT" /usr/bin/env \
+        -u WALLPAPER -u WALLPAPER_DIR \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+        HOME=/root TERM="${TERM:-dumb}" \
+        DEBIAN_FRONTEND=noninteractive \
+        QS_ISO_BUILDER=1 SUDO_USER=root \
+        MATUGEN_BIN="$MATUGEN_IN_CHROOT" \
+        WALLPAPER="$BUILDER_STAGE/wallpaper.jpg" \
+        WALLPAPER_DIR="$BUILDER_STAGE/Wallpapers" \
+        /bin/sh "$REPO_DIR/iso/build.sh" || status=$?
+
+    builder_cleanup
+    trap - EXIT INT TERM
+    chown "$RUN_USER:$RUN_USER" "$LOG" 2>/dev/null || true
+    if [ "$status" -ne 0 ]; then
+        echo "build.sh: build in de Debian-sid-omgeving is mislukt (exit $status)." >&2
+        return "$status"
+    fi
+    chown -R "$RUN_USER:$RUN_USER" "$OUT_DIR" 2>/dev/null || true
+    return 0
+}
+
+# Bewaar de live-build-pakketcache tussen builds; dat scheelt bij een
+# herstart veel download- en debootstrap-tijd. Doe dit vóór de matugen- en
+# wallpaper-stappen, want die kunnen iso/cache al aanmaken.
+if [ -d "$BUILD_DIR/cache" ] && [ ! -e "$CACHE_DIR" ]; then
+    mv "$BUILD_DIR/cache" "$CACHE_DIR"
+fi
+
+# Bepaal of we native of in een Debian-sid-omgeving bouwen.
+use_builder=0
+if [ "${QS_ISO_BUILDER:-0}" = 1 ] || [ "${QS_ISO_HOST_BUILD:-0}" = 1 ]; then
+    use_builder=0
+elif [ "${QS_ISO_FORCE_BUILDER:-0}" = 1 ]; then
+    use_builder=1
+elif host_can_build_native; then
+    use_builder=0
+else
+    use_builder=1
+fi
+
+if [ "$use_builder" = 1 ]; then
+    echo "== Host is geen Debian met recente live-build; gebruik Debian-sid-omgeving =="
+    status=0
+    build_in_builder || status=$?
+    exit "$status"
+fi
+
 for tool in lb debootstrap mksquashfs xorriso rsync convert; do
     need "$tool"
 done
@@ -123,13 +325,6 @@ fi
 AVAIL_KB=$(df -Pk "$ISO_DIR" | awk 'NR==2 {print $4}')
 if [ -n "$AVAIL_KB" ] && [ "$AVAIL_KB" -lt 12582912 ]; then
     echo "build.sh: waarschuwing: minder dan 12 GiB vrij op $(df -Pk "$ISO_DIR" | awk 'NR==2 {print $6}')." >&2
-fi
-
-# Bewaar de live-build-pakketcache tussen builds; dat scheelt bij een
-# herstart veel download- en debootstrap-tijd. Doe dit vóór de matugen- en
-# wallpaper-stappen, want die kunnen iso/cache al aanmaken.
-if [ -d "$BUILD_DIR/cache" ] && [ ! -e "$CACHE_DIR" ]; then
-    mv "$BUILD_DIR/cache" "$CACHE_DIR"
 fi
 
 if [ -n "${MATUGEN_BIN:-}" ]; then

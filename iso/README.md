@@ -16,14 +16,46 @@ BTRFS-configuratie neer als de bronmachine:
 
 ## Bouwen
 
+### Native op Debian sid/testing
+
 Vereisten (Debian sid):
 
 ```bash
 sudo apt update
 sudo apt install live-build debootstrap squashfs-tools xorriso \
-  grub-pc-bin isolinux syslinux-common dosfstools mtools rsync zstd \
-  imagemagick
+  grub-pc-bin grub-efi-amd64-bin grub-common isolinux syslinux-common \
+  syslinux-utils dosfstools mtools rsync zstd imagemagick \
+  fonts-jetbrains-mono file uuid-runtime bc curl
 ```
+
+### Vanaf Ubuntu of een andere distributie
+
+Ubuntu levert `live-build` 3.0~a57 uit 2013; die kent de opties in
+`iso/live-build/auto/config` niet. Op zo'n host maakt `iso/build.sh`
+eenmalig een Debian-sid-omgeving met `debootstrap` en bouwt daarin. Op de
+host is alleen dit nodig:
+
+```bash
+sudo apt update
+sudo apt install debootstrap debian-archive-keyring
+sudo iso/build.sh
+```
+
+De omgeving komt in `/var/cache/quickshell-iso/builder-sid` (circa 1 GB) en
+wordt bij volgende builds hergebruikt; de eerste build duurt daardoor extra.
+Met deze variabelen pas je het gedrag aan:
+
+| Variabele | Betekenis |
+| --- | --- |
+| `QS_BUILDER_DIR=/pad` | andere locatie voor de Debian-sid-omgeving |
+| `QS_BUILDER_REFRESH=1` | pakketten in de omgeving bijwerken |
+| `QS_BUILDER_MIRROR=...` | andere Debian-mirror voor de omgeving |
+| `QS_ISO_FORCE_BUILDER=1` | ook op Debian in de sid-omgeving bouwen |
+| `QS_ISO_HOST_BUILD=1` | nooit de sid-omgeving gebruiken; bouw native |
+
+Verwijderen kan met `sudo rm -rf /var/cache/quickshell-iso`; de volgende
+build maakt de omgeving opnieuw aan. De live-build-pakketcache blijft in
+`iso/cache/` staan en wordt gedeeld tussen native en chroot-builds.
 
 Matugen staat niet in Debian. Het buildscript zoekt eerst een bestaande
 binary (`MATUGEN_BIN=...`, `~/.local/bin/matugen`, `/usr/local/bin`) en haalt
@@ -38,10 +70,6 @@ De wallpaper komt uit `~/Pictures/wallpaper.jpg` en de map
 `WALLPAPER_DIR=...`. Ontbreekt de wallpaper, dan pakt het script de eerste
 afbeelding uit `WALLPAPER_DIR` of genereert het een donkere
 standaardwallpaper in `iso/cache/`.
-
-```bash
-sudo iso/build.sh
-```
 
 Het resultaat staat in `iso/out/`:
 
@@ -72,10 +100,12 @@ die onderdelen.
   - minimaal ~12 GiB vrije ruimte op de schijf van de repo (chroot, squashfs
     en ISO);
   - een amd64-host; op arm64 is qemu-binfmt nodig;
-  - `live-build` uit Debian sid/testing. Een oudere versie (bijvoorbeeld uit
-    Ubuntu of bookworm) kent niet alle opties in `iso/live-build/auto/config`;
   - genoeg rechten: live-build moet kunnen mounten en chrooten. In een
     container of WSL zonder die rechten stopt de build in de log.
+- **Oude `live-build` (bijvoorbeeld Ubuntu)** — gebruik je
+  `QS_ISO_HOST_BUILD=1` terwijl de host te oud is, dan faalt `lb config` op
+  onbekende opties. Laat die variabele weg: het script gebruikt dan
+  automatisch de Debian-sid-omgeving.
 
 ## Wat er in de live-omgeving zit
 
