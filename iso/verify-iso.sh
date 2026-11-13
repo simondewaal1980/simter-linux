@@ -59,10 +59,21 @@ check "/usr/local/bin/quickshell-user-setup"
 check "/usr/local/lib/quickshell/install-target.sh"
 check "/usr/share/xsessions/bspwm.desktop"
 check "/usr/share/backgrounds/quickshell/wallpaper.jpg"
+check "/usr/bin/grub-btrfsd"
+check "/etc/grub.d/41_snapshots-btrfs"
+check "/etc/default/grub-btrfs/config"
 check "/usr/lib/live/config/9999-calamares"
 check "/usr/bin/setfacl"
 check "/usr/local/bin/quickshell-session"
 check "/etc/X11/default-display-manager"
+check "/usr/bin/google-chrome-stable"
+check "/etc/apt/trusted.gpg.d/google-chrome.key.asc"
+check "/etc/xdg/mimeapps.list"
+check "/etc/opt/chrome/policies/managed/quickshell.json"
+check "/usr/local/bin/quickshell-gpu-setup"
+check "/etc/systemd/system/multi-user.target.wants/quickshell-gpu-setup.service"
+check "/usr/bin/nvidia-smi"
+check "/usr/bin/vainfo"
 
 echo "== Displaymanager en GLX =="
 if grep -q 'display-manager.service -> /lib/systemd/system/sddm.service' "$TMP/list-long.txt"; then
@@ -84,11 +95,24 @@ if grep -qE 'squashfs-root/usr/(s?bin)/lightdm$' "$TMP/list.txt"; then
 else
     echo "OK   geen lightdm"
 fi
-if grep -q 'squashfs-root/usr/lib/x86_64-linux-gnu/libGLX_nvidia' "$TMP/list.txt"; then
-    echo "FOUT NVIDIA-GLX-bibliotheek zit nog in de squashfs" >&2
-    failures=$((failures + 1))
+echo "== NVIDIA en Mesa =="
+if grep -qE 'squashfs-root/(usr/)?lib/modules/.*/updates/dkms/nvidia-current\.ko' "$TMP/list.txt"; then
+    echo "OK   NVIDIA-kernelmodule aanwezig"
 else
-    echo "OK   geen NVIDIA-GLX"
+    echo "FOUT NVIDIA-kernelmodule ontbreekt" >&2
+    failures=$((failures + 1))
+fi
+if grep -qE 'squashfs-root/usr/lib/x86_64-linux-gnu/(nvidia/current/)?libGLX_nvidia\.so\.0' "$TMP/list.txt"; then
+    echo "OK   NVIDIA-GLX-bibliotheek aanwezig"
+else
+    echo "FOUT NVIDIA-GLX-bibliotheek ontbreekt" >&2
+    failures=$((failures + 1))
+fi
+if grep -q 'squashfs-root/usr/lib/mesa-diverted' "$TMP/list.txt"; then
+    echo "OK   Mesa-terugval aanwezig"
+else
+    echo "FOUT Mesa-terugval ontbreekt" >&2
+    failures=$((failures + 1))
 fi
 
 echo "== Calamares BTRFS-configuratie =="
@@ -120,6 +144,23 @@ if unsquashfs -cat "$TMP/filesystem.squashfs" \
     echo "OK   install-target registreert de configuratie in /etc/default/snapper"
 else
     echo "FOUT install-target registreert SNAPPER_CONFIGS niet" >&2
+    failures=$((failures + 1))
+fi
+
+echo "== GRUB-snapshots =="
+if unsquashfs -cat "$TMP/filesystem.squashfs" \
+        usr/local/lib/quickshell/install-target.sh 2>/dev/null \
+        | grep -q 'grub-btrfsd'; then
+    echo "OK   install-target schakelt grub-btrfsd in"
+else
+    echo "FOUT install-target schakelt grub-btrfsd niet in" >&2
+    failures=$((failures + 1))
+fi
+if grep -qx 'squashfs-root/usr/lib/systemd/system/grub-btrfsd.service' \
+        "$TMP/list.txt"; then
+    echo "OK   grub-btrfsd.service aanwezig"
+else
+    echo "FOUT grub-btrfsd.service ontbreekt" >&2
     failures=$((failures + 1))
 fi
 

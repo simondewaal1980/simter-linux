@@ -1,0 +1,37 @@
+#!/bin/sh
+# Installeer grub-btrfs uit de meegeleverde upstream-bron. Debian heeft geen
+# grub-btrfs-pakket; zonder deze stap verschijnen de snapper-momentopnamen
+# niet in het GRUB-menu van het geïnstalleerde systeem.
+#
+# De service wordt hier niet ingeschakeld: dat gebeurt in het doelssysteem
+# door Calamares/install-target.sh. In de live-omgeving is er geen
+# /.snapshots om te volgen.
+set -e
+
+TARBALL=$(find /usr/src -maxdepth 1 -type f -name 'grub-btrfs-*.tar.gz' \
+    2>/dev/null | sort | head -n 1)
+if [ -z "$TARBALL" ] || [ ! -r "$TARBALL" ]; then
+    echo "0400-grub-btrfs: bron-tarball ontbreekt in /usr/src." >&2
+    exit 1
+fi
+
+if [ ! -x /usr/bin/grub-btrfsd ] \
+        || [ ! -x /etc/grub.d/41_snapshots-btrfs ]; then
+    TMP=$(mktemp -d)
+    trap 'rm -rf "$TMP"' EXIT INT TERM
+
+    tar -xzf "$TARBALL" -C "$TMP" --strip-components=1
+    make -C "$TMP" install \
+        GRUB_UPDATE_EXCLUDE=true \
+        SYSTEMD=true \
+        OPENRC=false \
+        INSTALL_DOCS=false
+
+    rm -rf "$TMP"
+    trap - EXIT INT TERM
+fi
+
+# De bron-tarball hoeft niet in de squashfs of in het doelssysteem te blijven.
+rm -f "$TARBALL"
+
+exit 0

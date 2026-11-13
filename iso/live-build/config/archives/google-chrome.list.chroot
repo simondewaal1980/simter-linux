@@ -1,0 +1,12 @@
+# Officiële Google Chrome-repository. De stabiele Chrome-build bevat de
+# propriëtaire codecs (H.264, AAC, MP3) en Widevine, die Debian's Chromium
+# niet meelevert.
+#
+# De sleutel staat in google-chrome.key en wordt door live-build in
+# /etc/apt/trusted.gpg.d/google-chrome.key.asc geplaatst.
+# Vingerafdruk: EB4C 1BFD 4F04 2F6D DDCC EC91 7721 F63B D38B 4796
+#
+# Bewust http: deze lijst wordt al vóór de pakketinstallatie gebruikt, wanneer
+# ca-certificates in de bootstrap-chroot nog niet aanwezig is. De pakketten
+# zijn door de APT-handtekening hierboven evengoed tegen manipulatie beveiligd.
+deb [signed-by=/etc/apt/trusted.gpg.d/google-chrome.key.asc] http://dl.google.com/linux/chrome/deb/ stable main

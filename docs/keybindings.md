@@ -10,7 +10,7 @@
 |---|---|---|
 | `Super+Return` | Terminal openen | `alacritty` |
 | `Super+D` | Applicatielauncher openen | `rofi -show drun` |
-| `Super+Shift+B` | Webbrowser openen | `firefox` |
+| `Super+Shift+B` | Webbrowser openen | `x-www-browser` (Chrome) |
 | `Super+Shift+F` | Bestandsbeheer openen | `pcmanfm-qt` |
 | `Super+W` | Volgende wallpaper (past ook het kleurenpalet aan) | `$HOME/projecten/quickshell/scripts/wallpaper-theme.sh next` |
 | `Super+Shift+W` | Wallpapervenster openen/sluiten (preview, toevoegen, verwijderen) | `qs -p "$HOME/projecten/quickshell" ipc call wallpaper toggle` |

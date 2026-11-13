@@ -27,6 +27,14 @@ deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
 EOF
 rm -f /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
 
+# Chrome komt uit Google's eigen repository, niet uit Debian. De sleutel is
+# bij de build in de squashfs gezet; laat de repo staan zodat Chrome op het
+# geïnstalleerde systeem via apt bijgewerkt kan worden.
+cat >/etc/apt/sources.list.d/google-chrome.list <<'EOF'
+deb [signed-by=/etc/apt/trusted.gpg.d/google-chrome.key.asc] https://dl.google.com/linux/chrome/deb/ stable main
+EOF
+chmod 644 /etc/apt/sources.list.d/google-chrome.list 2>/dev/null || true
+
 # --- fstab: normaliseer de BTRFS-root en de EFI-fsck-pass ----------------
 # Calamares schrijft subvol=/@rootfs; de bronmachine gebruikt subvol=@rootfs.
 # Verwijder dubbele subvol=*-opties en zet de root exact goed.
@@ -138,7 +146,8 @@ fi
 
 # --- Diensten -------------------------------------------------------------
 for unit in sddm NetworkManager bluetooth snapper-timeline.timer \
-            snapper-cleanup.timer fstrim.timer systemd-timesyncd; do
+            snapper-cleanup.timer grub-btrfsd fstrim.timer systemd-timesyncd \
+            quickshell-gpu-setup.service; do
     systemctl enable "$unit" >/dev/null 2>&1 || true
 done
 systemctl set-default graphical.target >/dev/null 2>&1 || true

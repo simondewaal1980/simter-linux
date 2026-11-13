@@ -26,7 +26,7 @@ super + d
 
 # Webbrowser openen
 super + shift + b
-	firefox
+	x-www-browser
 
 # Bestandsbeheer openen
 super + shift + f
@@ -216,5 +216,5 @@ super + shift + p
 # @qs-shortcut {"id":"qs-mwdmvs9o-jrrl","group":"Eigen sneltoetsen"}
 # Chrome
 super + g
-	google-chrome
+	google-chrome-stable
 # @qs-shortcut-end qs-mwdmvs9o-jrrl

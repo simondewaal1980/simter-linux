@@ -47,6 +47,11 @@ Singleton {
         root.run(["systemctl", "suspend"])
     }
 
+    function reboot() {
+        root.lastAction = "Herstarten"
+        root.run(["systemctl", "reboot"])
+    }
+
     function shutdown() {
         root.lastAction = "Afsluiten"
         root.run(["systemctl", "poweroff"])

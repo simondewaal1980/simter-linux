@@ -399,7 +399,7 @@ PanelWindow {
             }
 
             // Aan/uit-knop: opent het sessiemenu (afmelden, vergrendelen,
-            // slapen en afsluiten).
+            // slapen, herstarten en afsluiten).
             Item {
                 id: powerButton
 
@@ -467,7 +467,7 @@ PanelWindow {
         barWindow: bar
     }
 
-    // Sessiemenu: afmelden, vergrendelen, slapen en afsluiten.
+    // Sessiemenu: afmelden, vergrendelen, slapen, herstarten en afsluiten.
     PowerMenu {
         id: powerMenu
         barWindow: bar

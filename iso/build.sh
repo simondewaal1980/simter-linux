@@ -8,7 +8,9 @@
 # Persoonlijke bestanden uit $HOME (behalve de wallpaper en de Griekse
 # wallpapers) gaan niet mee. Matugen is niet in Debian en wordt als binary
 # meegebundeld; ontbreekt de binary, dan haalt dit script de officiële release
-# één keer naar iso/cache. De bron blijft het project in deze repo.
+# één keer naar iso/cache. grub-btrfs staat ook niet in Debian en wordt uit de
+# meegeleverde bron in iso/vendor gebouwd. De bron blijft het project in deze
+# repo.
 #
 # Op Debian sid/testing wordt native gebouwd. Op Ubuntu of een andere host
 # met een te oude live-build maakt het script eenmalig een Debian-sid-
@@ -38,6 +40,12 @@ MATUGEN_URL=${MATUGEN_URL:-https://github.com/InioX/matugen/releases/download/v$
 # sha256 van matugen-4.2.0-x86_64.tar.gz; leeg laten om niet te controleren
 # (bijvoorbeeld bij een zelf gekozen MATUGEN_VERSION).
 MATUGEN_SHA256=${MATUGEN_SHA256-a2e3b50e49ed6439999ba3c252ed04fabd98ee4e9d12e5e5dff2e66370569751}
+# Debian heeft geen grub-btrfs-pakket. De bron staat in iso/vendor en wordt
+# in de live-build-chroot geïnstalleerd, zodat het doelssysteem het
+# snapshot-submenu in GRUB krijgt.
+GRUB_BTRFS_VERSION=${GRUB_BTRFS_VERSION:-4.14}
+GRUB_BTRFS_TARBALL=${GRUB_BTRFS_TARBALL:-$ISO_DIR/vendor/grub-btrfs-$GRUB_BTRFS_VERSION.tar.gz}
+GRUB_BTRFS_SHA256=${GRUB_BTRFS_SHA256-4fe2f8a49b39e3e561fc51bbc5a0f81a7222c1e9ef8672e014e0ba3bedad20c6}
 WALLPAPER=${WALLPAPER:-$RUN_HOME/Pictures/wallpaper.jpg}
 WALLPAPER_DIR=${WALLPAPER_DIR:-$RUN_HOME/Pictures/Wallpapers}
 
@@ -345,6 +353,21 @@ else
 fi
 echo "matugen: $MATUGEN_BIN"
 
+[ -r "$GRUB_BTRFS_TARBALL" ] || {
+    echo "build.sh: grub-btrfs-bron niet gevonden: $GRUB_BTRFS_TARBALL" >&2
+    echo "Zet GRUB_BTRFS_TARBALL=/pad/naar/grub-btrfs-$GRUB_BTRFS_VERSION.tar.gz of herstel iso/vendor/." >&2
+    exit 1
+}
+if [ -n "$GRUB_BTRFS_SHA256" ]; then
+    if ! printf '%s  %s\n' "$GRUB_BTRFS_SHA256" "$GRUB_BTRFS_TARBALL" \
+            | sha256sum -c - >/dev/null 2>&1; then
+        echo "build.sh: sha256 van $GRUB_BTRFS_TARBALL klopt niet." >&2
+        echo "Controleer iso/vendor/README.md of zet GRUB_BTRFS_SHA256 leeg." >&2
+        exit 1
+    fi
+fi
+echo "grub-btrfs: $GRUB_BTRFS_TARBALL"
+
 if [ ! -r "$WALLPAPER" ]; then
     if [ -d "$WALLPAPER_DIR" ]; then
         WALLPAPER=$(find "$WALLPAPER_DIR" -maxdepth 1 -type f \
@@ -378,6 +401,7 @@ ln -s "$CACHE_DIR" "$BUILD_DIR/cache"
 INCLUDE=$BUILD_DIR/config/includes.chroot
 mkdir -p "$INCLUDE/opt" "$INCLUDE/etc" "$INCLUDE/usr/local/bin" \
          "$INCLUDE/usr/local/lib/quickshell" \
+         "$INCLUDE/usr/src" \
          "$INCLUDE/usr/share/backgrounds/quickshell/Wallpapers" \
          "$INCLUDE/usr/share/applications" \
          "$INCLUDE/usr/lib/live/config"
@@ -405,6 +429,8 @@ cp -a "$BRANDING/productLogo.png" "$BRANDING/productIcon.png"
 
 echo "== Matugen, wallpapers en live-config =="
 install -m755 "$MATUGEN_BIN" "$INCLUDE/usr/local/bin/matugen"
+install -m644 "$GRUB_BTRFS_TARBALL" \
+    "$INCLUDE/usr/src/grub-btrfs-$GRUB_BTRFS_VERSION.tar.gz"
 install -m644 "$WALLPAPER" "$INCLUDE/usr/share/backgrounds/quickshell/wallpaper.jpg"
 if [ -d "$WALLPAPER_DIR" ]; then
     find "$WALLPAPER_DIR" -maxdepth 1 -type f \

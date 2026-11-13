@@ -57,15 +57,16 @@ De installer schrijft dezelfde BTRFS-indeling als de bronmachine:
 | EFI | GPT, 1 GiB FAT32 op `/boot/efi`, `umask=0077` |
 | Root | één BTRFS-partitie, subvolume `@rootfs` |
 | Mountopties | `noatime,compress=zlib:3,discard=async,space_cache=v2` |
-| Snapshots | snapper-configuratie `root`, geneste `/.snapshots`, 50 nummer- en 10 tijdlijnmomentopnamen |
+| Snapshots | snapper-configuratie `root`, geneste `/.snapshots`, 50 nummer- en 10 tijdlijnmomentopnamen, plus een snapshot-submenu in GRUB via grub-btrfs |
 | Swap | geen (zoals op de bronmachine) |
 | Bootloader | GRUB met `rootflags=subvol=@rootfs` |
 
 Het project staat in het geïnstalleerde systeem in `/opt/quickshell`; de
 gebruiker krijgt `~/projecten/quickshell` als symlink, zodat de bestaande
 paden in `sxhkdrc`, Quickshell en de matugen-post-hook blijven werken.
-Persoonlijke bestanden en Google Chrome gaan niet mee; matugen en de
-meegeleverde wallpapers wel. Ontbreekt matugen op de buildmachine, dan haalt
+Persoonlijke bestanden gaan niet mee; Google Chrome wordt juist wél meegeleverd
+als standaardbrowser (met de propriëtaire codecs en Widevine), net als
+matugen en de meegeleverde wallpapers. Ontbreekt matugen op de buildmachine, dan haalt
 `iso/build.sh` de officiële release eenmalig naar `iso/cache/`; een bestaande
 binary is met `MATUGEN_BIN=...` te kiezen. Zie `iso/README.md` voor de
 builddetails en `PLAN.md` (aanvullende fase) voor de ontwerpkeuzes.
@@ -288,7 +289,7 @@ Belangrijkste combinaties:
 |---|---|---|
 | Apps | `Super+Return` | Alacritty |
 | Apps | `Super+D` | rofi-launcher |
-| Apps | `Super+Shift+B` / `Super+Shift+F` | Firefox / pcmanfm-qt |
+| Apps | `Super+Shift+B` / `Super+Shift+F` | Chrome / pcmanfm-qt |
 | Vensters | `Super+H/J/K/L` | Focus links/onder/boven/rechts |
 | Vensters | `Super+Shift+H/J/K/L` | Venster verplaatsen |
 | Vensters | `Super+Q` / `Super+Shift+Q` | Sluiten / geforceerd beëindigen |
@@ -509,9 +510,10 @@ scripts/test-notifications.sh all
 ### Powermenu
 
 De aan/uit-knop rechts in de bar opent een menu met afmelden, vergrendelen,
-slapen en afsluiten. De acties lopen via de `Power`-service: afmelden gebruikt
-`bspc quit`, slapen en afsluiten `systemctl suspend` en `systemctl poweroff`,
-en vergrendelen hergebruikt `scripts/lock-session.sh` (met `QS_LOCK_SCRIPT` is
+slapen, herstarten en afsluiten. De acties lopen via de `Power`-service:
+afmelden gebruikt `bspc quit`, slapen, herstarten en afsluiten
+`systemctl suspend`, `systemctl reboot` en `systemctl poweroff`, en
+vergrendelen hergebruikt `scripts/lock-session.sh` (met `QS_LOCK_SCRIPT` is
 een ander lockscript te kiezen). `Super+Shift+P` opent hetzelfde menu via
 `qs ipc call power toggle`; `scripts/powermenu.sh` valt terug op rofi als de
 bar niet draait.

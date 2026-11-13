@@ -1,0 +1,15 @@
+#!/bin/sh
+# Zorg dat de live-ISO automatisch doorstart na een korte keuzetijd.
+#
+# live-build laat de GRUB-menu's standaard wachten tot de gebruiker Enter
+# geeft. Voor een installeerbare live-ISO is dat onhandig: dezelfde ISO
+# wordt ook als USB-stick gebruikt. Zet daarom een timeout in de
+# GRUB-configuratie die live-build zojuist heeft gegenereerd.
+set -e
+
+CONFIG=boot/grub/config.cfg
+if [ -f "$CONFIG" ] && ! grep -q '^set timeout=' "$CONFIG"; then
+    sed -i '1i set timeout=10' "$CONFIG"
+fi
+
+exit 0

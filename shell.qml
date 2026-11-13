@@ -299,7 +299,7 @@ ShellRoot {
     }
 
     // Sessiemenu: qs ipc call power open | close | toggle | status
-    // Acties:    qs ipc call power lock | logout | sleep | shutdown
+    // Acties:    qs ipc call power lock | logout | sleep | reboot | shutdown
     IpcHandler {
         target: "power"
 
@@ -337,6 +337,10 @@ ShellRoot {
 
         function sleep(): void {
             Power.sleep()
+        }
+
+        function reboot(): void {
+            Power.reboot()
         }
 
         function shutdown(): void {

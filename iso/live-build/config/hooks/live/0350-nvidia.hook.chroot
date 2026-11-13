@@ -1,0 +1,31 @@
+#!/bin/sh
+# Controleer dat de NVIDIA-kernelmodule echt voor de ISO-kernel is gebouwd.
+#
+# nvidia-driver installeert nvidia-kernel-dkms. DKMS bouwt de module tijdens
+# de pakketinstallatie in de chroot; op een buildmachine zonder NVIDIA-GPU
+# gebeurt dat gewoon uit de bron. Zonder deze controle zou een mislukte
+# DKMS-build pas op de doelcomputer blijken.
+set -e
+
+if ! ls /lib/modules/*/updates/dkms/nvidia-current.ko* >/dev/null 2>&1; then
+    echo "0350-nvidia: geen NVIDIA-module gevonden; dkms autoinstall proberen." >&2
+    # Niet simpelweg `dkms autoinstall` gebruiken: in een chroot is uname -r
+    # de kernel van de host, die niet in /lib/modules hoeft te staan. Bouw
+    # daarom expliciet voor elke geïnstalleerde kernel met headers.
+    for kernel in /lib/modules/*; do
+        [ -d "$kernel/build" ] || continue
+        dkms autoinstall -k "$(basename "$kernel")" || true
+    done
+fi
+
+if ! ls /lib/modules/*/updates/dkms/nvidia-current.ko* >/dev/null 2>&1; then
+    echo "0350-nvidia: NVIDIA-kernelmodule ontbreekt in /lib/modules." >&2
+    echo "Controleer of linux-headers-amd64 en nvidia-kernel-dkms zijn geïnstalleerd." >&2
+    exit 1
+fi
+
+# De module is niet nodig in de initramfs, maar depmod moet hem wel kennen
+# zodat udev hem op een NVIDIA-GPU kan laden.
+depmod -a
+
+exit 0

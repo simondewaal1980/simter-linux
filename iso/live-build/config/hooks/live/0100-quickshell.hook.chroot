@@ -22,6 +22,7 @@ fi
 # Onze componenten en scripts zijn uitvoerbaar.
 chmod 755 /usr/local/bin/quickshell-user-setup \
           /usr/local/bin/quickshell-session \
+          /usr/local/bin/quickshell-gpu-setup \
           /usr/local/lib/quickshell/install-target.sh \
           /usr/lib/live/config/9999-calamares
 chmod 644 /usr/local/lib/quickshell/snapper-root.conf
@@ -32,6 +33,21 @@ chmod 755 /opt/quickshell/config/bspwm/bspwmrc
 
 # Matugen is een losse binary in /usr/local/bin.
 [ -x /usr/local/bin/matugen ] && chmod 755 /usr/local/bin/matugen || true
+
+# Chrome is de standaardbrowser; Firefox blijft als terugval aanwezig.
+if [ -x /usr/bin/google-chrome-stable ]; then
+    update-alternatives --install /usr/bin/x-www-browser x-www-browser \
+        /usr/bin/google-chrome-stable 200 >/dev/null 2>&1 || true
+    update-alternatives --set x-www-browser \
+        /usr/bin/google-chrome-stable >/dev/null 2>&1 || true
+fi
+
+# De NVIDIA/Mesa-keuze gebeurt bij elke boot, vóór de displaymanager.
+systemctl enable quickshell-gpu-setup.service >/dev/null 2>&1 || {
+    mkdir -p /etc/systemd/system/multi-user.target.wants
+    ln -sf /usr/lib/systemd/system/quickshell-gpu-setup.service \
+        /etc/systemd/system/multi-user.target.wants/quickshell-gpu-setup.service
+}
 
 # De live-gebruiker krijgt dezelfde skel-configuratie via /etc/skel.
 chmod 755 /etc/skel/.config/bspwm 2>/dev/null || true

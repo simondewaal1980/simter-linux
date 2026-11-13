@@ -1,8 +1,8 @@
 // PowerMenu.qml — sessiemenu onder de aan/uit-knop in de bar.
 //
-// Vier acties: afmelden (BSPWM-sessie beëindigen), vergrendelen, slapen
-// (opschorten) en afsluiten. De uitvoering loopt via de Power-service, die de
-// commando's losgekoppeld start.
+// Vijf acties: afmelden (BSPWM-sessie beëindigen), vergrendelen, slapen
+// (opschorten), herstarten en afsluiten. De uitvoering loopt via de
+// Power-service, die de commando's losgekoppeld start.
 //
 // Het venster opent onder de bar, rechts uitgelijnd. Onder X11 krijgt een
 // PopupWindow geen toetsenbordfocus (issue #794); alle bediening loopt via de
@@ -51,6 +51,13 @@ PopupWindow {
             color: Theme.sky
         },
         {
+            action: "reboot",
+            label: "Herstarten",
+            description: "Systeem opnieuw opstarten",
+            icon: "\uf01e", // arrow-rotate-right
+            color: Theme.peach
+        },
+        {
             action: "shutdown",
             label: "Afsluiten",
             description: "Systeem uitschakelen",
@@ -88,6 +95,8 @@ PopupWindow {
             Power.lock()
         else if (action === "sleep")
             Power.sleep()
+        else if (action === "reboot")
+            Power.reboot()
         else if (action === "shutdown")
             Power.shutdown()
     }

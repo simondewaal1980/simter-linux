@@ -1,0 +1,74 @@
+#!/bin/sh
+# quickshell-gpu-setup — kies bij het opstarten de juiste GLX-implementatie.
+#
+# De ISO bevat zowel de propriëtaire NVIDIA-driver als Mesa. Debian's
+# glx-alternative-nvidia zet de NVIDIA-GLX-bibliotheken standaard boven Mesa,
+# ook op een machine zonder NVIDIA-GPU. Dan ontbreekt hardwarematige OpenGL
+# en start de desktop traag of helemaal niet. Deze service kiest daarom:
+#
+#   - NVIDIA-GPU en een werkende nvidia-driver  -> NVIDIA-GLX;
+#   - NVIDIA-GPU maar geen werkende driver      -> Mesa + nouveau;
+#   - geen NVIDIA-GPU                           -> Mesa.
+#
+# De keuze wordt bij elke boot opnieuw gemaakt, dus dezelfde ISO werkt op de
+# VM zonder NVIDIA en op een desktop met NVIDIA.
+
+set -u
+
+GLX_NVIDIA=/usr/lib/nvidia
+GLX_MESA=/usr/lib/mesa-diverted
+
+log() {
+    logger -t quickshell-gpu "$*" 2>/dev/null || true
+}
+
+nvidia_hardware() {
+    command -v lspci >/dev/null 2>&1 || return 1
+    # 0300/0301/0302 = VGA, XGA of 3D-controller; 10de = NVIDIA.
+    lspci -mn 2>/dev/null | awk '
+        $2 ~ /^030[0-2]/ && tolower($3) == "10de" { found = 1 }
+        END { exit(found ? 0 : 1) }
+    '
+}
+
+nvidia_works() {
+    modprobe nvidia >/dev/null 2>&1 || return 1
+    modprobe nvidia-drm >/dev/null 2>&1 || true
+
+    # De driver maakt per gevonden GPU een map onder /proc/driver/nvidia/gpus.
+    # Zo is geen nvidia-smi nodig om te bepalen of de driver echt werkt.
+    for gpu in /proc/driver/nvidia/gpus/*; do
+        [ -d "$gpu" ] && return 0
+    done
+    return 1
+}
+
+set_glx() {
+    # Zonder glx-alternative (bijvoorbeeld een kale Mesa-installatie) is er
+    # niets te kiezen.
+    update-alternatives --query glx >/dev/null 2>&1 || return 0
+    update-alternatives --set glx "$1" >/dev/null 2>&1
+}
+
+if nvidia_hardware; then
+    if nvidia_works; then
+        set_glx "$GLX_NVIDIA"
+        log "NVIDIA-GPU met werkende driver; GLX op NVIDIA."
+        exit 0
+    fi
+
+    # De NVIDIA-module werkt niet (bijvoorbeeld een niet-ondersteunde GPU).
+    # Haal de nouveau-blacklist weg en probeer nouveau als terugval.
+    log "NVIDIA-GPU gevonden, maar de driver werkt niet; terug naar Mesa/nouveau."
+    rm -f /etc/modprobe.d/nvidia-blacklists-nouveau.conf
+    modprobe -r nvidia-drm nvidia-modeset nvidia 2>/dev/null || true
+    modprobe nouveau 2>/dev/null || true
+    set_glx "$GLX_MESA" || update-alternatives --auto glx 2>/dev/null || true
+    exit 0
+fi
+
+# Geen NVIDIA-hardware: Mesa heeft de voorkeur, ook al is de NVIDIA-driver
+# geïnstalleerd.
+set_glx "$GLX_MESA" || update-alternatives --auto glx 2>/dev/null || true
+log "geen NVIDIA-GPU; GLX op Mesa."
+exit 0
