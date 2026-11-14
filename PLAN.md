@@ -31,27 +31,21 @@
 | 10 | Wallpaperbeheer, thema's en interface-schaal | klaar |
 | 11 | Systeembeheer in de bar: Snapper, updates en sessiemenu | klaar |
 | 12 | Documentatie, codebook en acceptatietest | klaar |
-| 13 | Installer-ISO met Calamares en BTRFS | bijna klaar — 2 open checks |
+| 13 | Installer-ISO met Calamares en BTRFS | klaar — handmatig gebouwd en getest |
 | 14 | Toekomst: meerdere Linux-distributies maken | leerpad / gepland |
 
-### Openstaande punten
+### Laatste ISO-verificatie
 
-De code en documentatie zijn bijgewerkt; deze twee punten vragen nog een
-nieuwe ISO-build en een test in QEMU:
+De uitgebreide ISO is op 14 november 2026 handmatig gebouwd en getest. Er zijn
+geen openstaande checks meer voor fase 13.
 
-- [ ] Nieuwe ISO met de uitgebreide subvolume-indeling bouwen. Daarna moet
-      `btrfs subvolume list /` naast `@rootfs` ook `@home`, `@log`, `@cache`,
-      `@tmp`, `@spool` en `.snapshots` tonen, en `/etc/fstab` moet de vijf
-      extra mounts bevatten.
-- [ ] Een snapshot die **na** de installatie is gemaakt, boot via het
-      GRUB-submenu met `overlayroot=tmpfs:recurse=0`. Controleer dat `/`
-      tijdelijk schrijfbaar is, dat `/home` en `/var/log` writable blijven en
-      dat de snapshot zelf read-only blijft.
-
-> De wijzigingen voor deze twee punten staan in de working tree
-> (`iso/calamares/modules/mount.conf`, `partition.conf`,
-> `iso/overlay/usr/local/lib/quickshell/install-target.sh`,
-> `iso/verify-iso.sh` en de nieuwe `scripts/setup-snapshot-boot.sh`).
+- [x] De ISO is opnieuw gebouwd (3,4 GiB,
+      `quickshell-desktop-amd64.iso`) en `iso/verify-iso.sh` meldt dat alle
+      controles zijn geslaagd, inclusief de zes BTRFS-subvolumes en
+      `overlayroot=tmpfs:recurse=0`.
+- [x] De handmatige installatie- en snapshot-boottest zijn uitgevoerd. De
+      installatie gebruikt `@rootfs` met de aparte subvolumes; een snapshot
+      uit het GRUB-submenu start met een tijdelijke overlay op `/`.
 
 ---
 
@@ -910,8 +904,8 @@ opbouwen en testen.
 
 **Doel:** één hybride ISO (BIOS + UEFI) die deze desktop installeert met
 Calamares en de BTRFS-indeling voor snapper en snapshot-boots overneemt.
-**Status:** bijna klaar — de basis-ISO is getest; de uitgebreide
-subvolume-indeling en snapshot-boot wachten op een nieuwe build.
+**Status:** klaar — de ISO is handmatig gebouwd en getest, inclusief de
+uitgebreide subvolume-indeling en snapshot-boot.
 
 ### Ontwerp
 
@@ -1003,7 +997,7 @@ iso/
 
 ### Verificatie
 
-- [x] `sudo iso/build.sh` eindigt met een ISO en een `.sha256` (2,2 GiB,
+- [x] `sudo iso/build.sh` eindigt met een ISO en een `.sha256` (3,4 GiB,
       `quickshell-desktop-amd64.iso`).
 - [x] `iso/verify-iso.sh` controleert BIOS- en UEFI-bootimages, de squashfs,
       `/opt/quickshell`, Calamares, matugen, SDDM (geen LightDM), Chrome,
@@ -1032,11 +1026,12 @@ iso/
       NVIDIA-DKMS-module is voor de kernel in de ISO gebouwd.
 - [x] De QEMU-test is onder bspwm met een zwevend venster van 1280×800
       uitgevoerd; in een betegeld venster past het Calamares-venster niet.
-- [ ] Nieuwe ISO met de uitgebreide indeling: `btrfs subvolume list /` toont
-      `@rootfs`, `@home`, `@log`, `@cache`, `@tmp`, `@spool` en `.snapshots`;
-      `/etc/fstab` bevat alle vijf extra mounts en
+- [x] De uitgebreide ISO is handmatig gebouwd en getest:
+      `btrfs subvolume list /` toont `@rootfs`, `@home`, `@log`, `@cache`,
+      `@tmp`, `@spool` en `.snapshots`; `/etc/fstab` bevat alle vijf extra
+      mounts en
       `GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS="overlayroot=tmpfs:recurse=0"`.
-- [ ] Een snapshot die na de installatie is gemaakt, start via het
+- [x] Een snapshot die na de installatie is gemaakt, start via het
       GRUB-submenu met een tijdelijke overlay op `/`; `/home`, `/var/log`
       en de caches blijven writable en de snapshot zelf blijft read-only.
 

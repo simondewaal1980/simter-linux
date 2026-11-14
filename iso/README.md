@@ -227,8 +227,10 @@ De referentie-ISO is in QEMU met OVMF (UEFI) getest:
 - Calamares start automatisch in de LXQt-live-sessie en toont de
   Quickshell-branding.
 - Installatie op een lege 24 GiB-schijf maakt EFI 1 GiB + BTRFS-root
-  (23 GiB), subvolume `@rootfs` en geneste `.snapshots`.
-- fstab: `subvol=@rootfs,noatime,compress=zlib:3,discard=async,space_cache=v2`.
+  (23 GiB), subvolume `@rootfs`, de aparte subvolumes `@home`, `@log`,
+  `@cache`, `@tmp` en `@spool`, en geneste `.snapshots`.
+- fstab: `subvol=@rootfs,noatime,compress=zlib:3,discard=async,space_cache=v2`
+  plus de vijf extra subvolume-mounts; `/var/tmp` is `1777`.
 - GRUB: `rootflags=subvol=@rootfs`; de EFI-entry `Quickshell` start via
   `shimx64.efi`.
 - SDDM is de displaymanager; de bspwm-sessie is standaard en na login draait
@@ -242,11 +244,16 @@ De referentie-ISO is in QEMU met OVMF (UEFI) getest:
   doelssysteem en de daemon is ingeschakeld. Zodra snapper een momentopname
   maakt, werkt de daemon `grub-btrfs.cfg` bij en verschijnt het
   snapshot-submenu in GRUB.
+- Een snapshot die na de installatie is gemaakt, start via het GRUB-submenu
+  met `overlayroot=tmpfs:recurse=0`: alleen `/` krijgt een tijdelijke
+  schrijfbare laag, terwijl `/home` en de aparte `/var`-subvolumes writable
+  blijven en de snapshot zelf read-only blijft.
 - Op de geïnstalleerde schijf zijn `Super+/` (71 bindingen),
   `Super+Shift+S` (BSPWM-instellingen) en een D-Bus-notificatie (popup +
   badge) getest; de Snapper-teller staat in de bar.
 
-De Chrome/NVIDIA-versie (2,9 GiB) is opnieuw in QEMU met OVMF geboot:
+De meest recente build (3,4 GiB, met Chrome, NVIDIA en de uitgebreide
+subvolume-indeling) is handmatig gebouwd en getest:
 
 - De LXQt-live-sessie start en Calamares opent automatisch; het GRUB-menu
   start na 10 seconden zonder toetsaanslag door.
@@ -260,19 +267,21 @@ De Chrome/NVIDIA-versie (2,9 GiB) is opnieuw in QEMU met OVMF geboot:
   `7.3.4+deb14-amd64` gebouwd en in de squashfs geïnstalleerd; op echte
   NVIDIA-hardware is dat de route die de bootservice selecteert.
 
-### Nog te testen na de nieuwe build
+### Laatste build en test
 
-De volgende punten horen bij de uitgebreide subvolume-indeling en moeten na
-het bouwen van de nieuwe ISO opnieuw in QEMU worden gecontroleerd:
+De uitgebreide ISO is op 14 november 2026 handmatig gebouwd en getest. Alle
+punten hieronder zijn bevestigd:
 
-- `btrfs subvolume list /` toont `@rootfs`, `@home`, `@log`, `@cache`,
-  `@tmp`, `@spool` en `.snapshots`.
-- `/etc/fstab` bevat de vijf extra subvolume-regels en `/var/tmp` is `1777`.
-- `GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS` staat op
-  `overlayroot=tmpfs:recurse=0`.
-- Een snapshot die na de installatie is gemaakt, start via het GRUB-submenu
-  met een tijdelijke overlay op `/`; `/home` en `/var/log` blijven
-  schrijfbaar en de snapshot zelf blijft read-only.
+- [x] `btrfs subvolume list /` toont `@rootfs`, `@home`, `@log`, `@cache`,
+      `@tmp`, `@spool` en `.snapshots`.
+- [x] `/etc/fstab` bevat de vijf extra subvolume-regels en `/var/tmp` is
+      `1777`.
+- [x] `GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS` staat op
+      `overlayroot=tmpfs:recurse=0`.
+- [x] Een snapshot die na de installatie is gemaakt, start via het
+      GRUB-submenu met een tijdelijke overlay op `/`; `/home` en `/var/log`
+      blijven schrijfbaar en de snapshot zelf blijft read-only.
+- [x] `iso/verify-iso.sh` meldt dat alle controles zijn geslaagd.
 
 ## Aanpassen
 
