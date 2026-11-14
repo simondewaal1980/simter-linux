@@ -440,8 +440,10 @@ ShellRoot {
             return JSON.stringify(base)
         }
 
+        // Volledige controle: werkt eerst de APT-index bij (via pkexec) en
+        // leest daarna de beschikbare updates.
         function refresh(): void {
-            Updates.refresh()
+            Updates.refresh(true)
         }
 
         // Werkt eerst APT en daarna Flatpak bij (met bevestiging in de GUI).

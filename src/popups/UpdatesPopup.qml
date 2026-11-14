@@ -1,10 +1,11 @@
 // UpdatesPopup.qml — beschikbare updates onder de Updates-widget in de bar.
 //
 // Toont de APT- en Flatpak-updates die de Updates-service heeft gevonden.
-// Met de verversknop wordt opnieuw gekeken; met "Bijwerken" worden eerst de
-// systeemupdates en daarna de Flatpaks bijgewerkt. Omdat dit systeemwijzigingen
-// zijn, vraagt de knop om een tweede klik. APT gebruikt daarbij pkexec
-// (instelbaar met UPDATES_ELEVATE); Flatpak regelt eventuele bevoegdheid zelf.
+// Met de verversknop wordt de APT-index bijgewerkt (`pkexec apt-get update`)
+// en daarna opnieuw gekeken; met "Bijwerken" worden eerst de systeemupdates
+// en daarna de Flatpaks bijgewerkt. Omdat dit systeemwijzigingen zijn, vraagt
+// de knop om een tweede klik. APT gebruikt daarbij pkexec (instelbaar met
+// UPDATES_ELEVATE); Flatpak regelt eventuele bevoegdheid zelf.
 //
 // Onder X11 krijgt een PopupWindow geen toetsenbordfocus (issue #794); de
 // popup bevat daarom geen tekstinvoer en sluit via de X-knop, een klik op de
@@ -120,7 +121,10 @@ PopupWindow {
         if (popup.visible) {
             popup.confirmUpdate = false
             updateConfirmTimer.stop()
-            Updates.refresh()
+            // Alleen de bestaande index lezen; `apt-get update` draait pas
+            // na een bewuste klik op de verversknop, zodat openen van de
+            // popup niet om bevoegdheid vraagt.
+            Updates.refresh(false)
         }
     }
 
@@ -193,7 +197,8 @@ PopupWindow {
                 Text {
                     Layout.fillWidth: true
                     text: Updates.loading
-                        ? "controleren…"
+                        ? (Updates.fetchingIndex
+                            ? "pakketlijsten verversen…" : "controleren…")
                         : (Updates.checked
                             ? "(" + Updates.totalCount + ")" : "")
                     color: Theme.barMuted
@@ -235,7 +240,7 @@ PopupWindow {
                         hoverEnabled: true
                         enabled: !Updates.loading && !Updates.busy
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Updates.refresh()
+                        onClicked: Updates.refresh(true)
                     }
                 }
 
@@ -446,14 +451,17 @@ PopupWindow {
                         ? (Updates.pendingUpdate === "flatpak"
                             ? "Flatpaks worden bijgewerkt…"
                             : "Systeem wordt bijgewerkt…")
-                        : (popup.confirmUpdate
-                            ? "Nogmaals klikken: APT full-upgrade + Flatpak"
-                            : (Updates.lastAction.length > 0
-                                ? Updates.lastAction
-                                : "Laatst gecontroleerd: "
-                                    + Updates.updatedLabel()))
+                        : (Updates.fetchingIndex
+                            ? "Pakketlijsten verversen (bevoegdheid nodig)…"
+                            : (popup.confirmUpdate
+                                ? "Nogmaals klikken: APT full-upgrade + Flatpak"
+                                : (Updates.lastAction.length > 0
+                                    ? Updates.lastAction
+                                    : "Laatst gecontroleerd: "
+                                        + Updates.updatedLabel())))
                     color: popup.confirmUpdate ? Theme.yellow
                         : (Updates.lastAction.length > 0 && !Updates.busy
+                            && !Updates.fetchingIndex
                             ? Theme.green : Theme.overlay1)
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSmall

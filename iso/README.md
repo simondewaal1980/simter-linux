@@ -1,18 +1,23 @@
 # Quickshell Desktop — installatie-ISO
 
 Deze map bouwt een hybride ISO (BIOS + UEFI) met Debian sid, een LXQt-
-live-sessie en de Calamares-installer. De installer zet dezelfde desktop en
-BTRFS-configuratie neer als de bronmachine:
+live-sessie en de Calamares-installer. De installer zet dezelfde desktop neer
+als de bronmachine, met een BTRFS-indeling die op snapper en snapshot-boots is
+geoptimaliseerd:
 
 - GPT bij UEFI met een EFI-partitie van 1 GiB op `/boot/efi`;
-- één BTRFS-rootpartitie met subvolume `@rootfs` (de ongebruikte
-  top-level subvolumes `@`, `@home`, `@log` en `@pkg` van de bronmachine
-  worden niet overgenomen; `/home` zit in `@rootfs`);
+- één BTRFS-rootpartitie met `@rootfs` op `/` en aparte subvolumes
+  `@home`, `@log`, `@cache`, `@tmp` en `@spool` voor respectievelijk
+  `/home`, `/var/log`, `/var/cache`, `/var/tmp` en `/var/spool`;
 - mountopties `noatime,compress=zlib:3,discard=async,space_cache=v2`;
 - snapper-configuratie `root` met geneste `/.snapshots` en ACL voor de
   gekozen gebruiker;
 - grub-btrfs in het doelssysteem: de snapper-momentopnamen staan na de
   eerste momentopname in een eigen GRUB-submenu;
+- overlayroot voor snapshot-boots: alleen die entries krijgen
+  `overlayroot=tmpfs:recurse=0`, zodat alleen `/` een tijdelijke
+  schrijfbare laag krijgt en `/home` en de aparte `/var`-subvolumes
+  writable blijven;
 - geen swap, net als de bronmachine;
 - SDDM, BSPWM en de Quickshell-bar na de eerste login.
 
@@ -118,6 +123,11 @@ die onderdelen.
 - **`sha256 van matugen klopt niet`** — verwijder
   `iso/cache/matugen-*` en probeer opnieuw, of zet `MATUGEN_SHA256` leeg als
   je bewust een andere versie gebruikt.
+- **`mksquashfs` stopt met `xz uncompress failed with error code 9`** — de
+  xz-compressie gebruikt bij veel processoren te veel geheugen (bijvoorbeeld
+  op een VM met 8 GiB en zonder swap). De live-build-config gebruikt daarom
+  `zstd` op niveau 3. Wil je toch xz, verhoog dan het geheugen of verlaag het
+  aantal mksquashfs-processoren.
 - **`lb build is mislukt` of `geen ISO gevonden`** — het script toont nu de
   laatste 60 regels van `iso/build.log`. Controleer verder:
   - minimaal ~12 GiB vrije ruimte op de schijf van de repo (chroot, squashfs
@@ -168,6 +178,10 @@ die onderdelen.
    - registreert die configuratie in `/etc/default/snapper`
      (`SNAPPER_CONFIGS="root"`), want zonder die regel kent snapper hem niet;
    - zet `ALLOW_USERS` en de ACL;
+   - controleert de vijf extra subvolumes in `/etc/fstab` en zet de juiste
+     rechten op de lege btrfs-roots (onder meer `1777` op `/var/tmp`);
+   - zet `overlayroot=tmpfs:recurse=0` in de grub-btrfs-configuratie, zodat
+     alleen snapshot-boots een tijdelijke schrijfbare systeemroot krijgen;
    - schakelt SDDM, NetworkManager, bluetooth, snapper-timers, fstrim en
      `grub-btrfsd` in;
    - draait `quickshell-user-setup` voor de nieuwe gebruiker.
@@ -191,6 +205,8 @@ sudo mount -o subvol=@rootfs /dev/nbd0p2 /mnt
 findmnt -no OPTIONS /mnt
 sudo btrfs subvolume list /mnt
 sudo cat /mnt/etc/fstab
+grep -E 'subvol=@(rootfs|home|log|cache|tmp|spool)' /mnt/etc/fstab
+grep GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS /mnt/etc/default/grub-btrfs/config
 sudo cat /mnt/boot/grub/grub.cfg | grep rootflags
 grep SNAPPER_CONFIGS /mnt/etc/default/snapper
 sudo chroot /mnt snapper -c root list
@@ -243,6 +259,20 @@ De Chrome/NVIDIA-versie (2,9 GiB) is opnieuw in QEMU met OVMF geboot:
 - De NVIDIA-DKMS-module is tijdens de build voor
   `7.3.4+deb14-amd64` gebouwd en in de squashfs geïnstalleerd; op echte
   NVIDIA-hardware is dat de route die de bootservice selecteert.
+
+### Nog te testen na de nieuwe build
+
+De volgende punten horen bij de uitgebreide subvolume-indeling en moeten na
+het bouwen van de nieuwe ISO opnieuw in QEMU worden gecontroleerd:
+
+- `btrfs subvolume list /` toont `@rootfs`, `@home`, `@log`, `@cache`,
+  `@tmp`, `@spool` en `.snapshots`.
+- `/etc/fstab` bevat de vijf extra subvolume-regels en `/var/tmp` is `1777`.
+- `GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS` staat op
+  `overlayroot=tmpfs:recurse=0`.
+- Een snapshot die na de installatie is gemaakt, start via het GRUB-submenu
+  met een tijdelijke overlay op `/`; `/home` en `/var/log` blijven
+  schrijfbaar en de snapshot zelf blijft read-only.
 
 ## Aanpassen
 
@@ -318,8 +348,8 @@ GPU wordt uiteraard Mesa gebruikt.
   geregistreerd.
 - De bronmachine heeft geen swap; de installer maakt er ook geen. Voor
   hibernation is een aparte swap-partitie of -file nodig.
-- De GRUB-snapshotvermelding is een reddingsmenu: snapper maakt
-  alleen-lezen momentopnamen en `/var/log` zit in dezelfde `@rootfs`. Een
-  momentopname start daarom read-only; schrijvende diensten kunnen tijdens
-  zo'n sessie klagen. Voor volledig schrijfbare snapshot-sessies zijn aparte
-  subvolumes voor `/var/log` (en eventueel `/home`) nodig.
+- Een snapshot-boot gebruikt `overlayroot=tmpfs:recurse=0`: wijzigingen aan
+  `/` (inclusief `/etc` en `/var/lib`) zijn tijdelijk en verdwijnen na het
+  afsluiten. `/home` en de aparte `/var`-subvolumes zijn de live subvolumes;
+  wijzigingen daarin worden dus wél bewaard. Oudere snapshots waarvan de
+  initramfs nog geen overlayroot bevat, zijn alleen voor rollback.

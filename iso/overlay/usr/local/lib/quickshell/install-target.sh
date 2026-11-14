@@ -54,6 +54,79 @@ if [ -f /etc/fstab ]; then
     ' /etc/fstab >/etc/fstab.new && mv /etc/fstab.new /etc/fstab
 fi
 
+# --- Extra BTRFS-subvolumes: rechten gelijk aan een normale root ----------
+# Calamares mount deze subvolumes als lege btrfs-roots. De squashfs-inhoud
+# wordt er tijdens unpackfs in gezet, maar de root van zo'n subvolume krijgt
+# niet altijd de juiste mode. /var/tmp moet bijvoorbeeld sticky zijn.
+for dir in /home /var/log /var/cache /var/spool; do
+    if [ -d "$dir" ]; then
+        chown root:root "$dir" 2>/dev/null || true
+        chmod 0755 "$dir" 2>/dev/null || true
+    fi
+done
+if [ -d /var/tmp ]; then
+    chown root:root /var/tmp 2>/dev/null || true
+    chmod 1777 /var/tmp 2>/dev/null || true
+fi
+
+# Controleer dat de indeling echt in fstab staat; zonder deze regels mount een
+# snapshot-boot de schrijfbare subvolumes niet en blijft /var/log read-only.
+missing_subvolumes=""
+for dir in /home /var/log /var/cache /var/tmp /var/spool; do
+    if ! awk -v mp="$dir" \
+            '$2 == mp && $3 == "btrfs" && $4 ~ /subvol=/ { found = 1 }
+             END { exit !found }' /etc/fstab 2>/dev/null; then
+        missing_subvolumes="$missing_subvolumes $dir"
+    fi
+done
+if [ -n "$missing_subvolumes" ]; then
+    echo "install-target: waarschuwing: subvolume(s) ontbreken in /etc/fstab:" \
+        "$missing_subvolumes" >&2
+fi
+
+# Met alle aparte subvolumes is alleen / tijdelijk; zonder die subvolumes
+# moet de hele root in de overlay, anders blijven /var en /home read-only.
+if [ -z "$missing_subvolumes" ]; then
+    SNAPSHOT_OVERLAY="overlayroot=tmpfs:recurse=0"
+else
+    SNAPSHOT_OVERLAY="overlayroot=tmpfs"
+fi
+
+# --- Snapshot-boot: tijdelijke schrijfbare laag ---------------------------
+# Snapper bewaart momentopnamen read-only. De aparte subvolumes houden
+# /home, /var/log en de caches schrijfbaar, maar /etc, /usr en /var/lib
+# blijven read-only. overlayroot legt daarom alleen bij de snapshot-entries
+# in GRUB een tmpfs-overlay over /. Met recurse=0 blijven de aparte
+# subvolumes writable gemount en is alleen de systeemroot tijdelijk; zonder
+# die subvolumes wordt de hele root geoverlayd. Een normale boot blijft
+# ongewijzigd.
+GRUB_BTRFS_CONFIG=/etc/default/grub-btrfs/config
+if [ -f "$GRUB_BTRFS_CONFIG" ]; then
+    if [ "$(dpkg-query -W -f='${Status}' overlayroot 2>/dev/null || true)" = \
+            "install ok installed" ]; then
+        current=$(sed -n \
+            's/^GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' \
+            "$GRUB_BTRFS_CONFIG" | tail -n 1)
+        # Vervang een eventueel bestaande overlayroot=... door de gewenste
+        # waarde en laat andere snapshot-parameters staan.
+        kept=""
+        for param in $current; do
+            case $param in
+                overlayroot=*) ;;
+                *) kept="${kept:+$kept }$param" ;;
+            esac
+        done
+        current="${kept:+$kept }$SNAPSHOT_OVERLAY"
+        sed -i '/^GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS=/d' \
+            "$GRUB_BTRFS_CONFIG"
+        printf 'GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS="%s"\n' "$current" \
+            >>"$GRUB_BTRFS_CONFIG"
+    else
+        echo "install-target: waarschuwing: overlayroot ontbreekt;" \
+            "snapshot-boots blijven read-only." >&2
+    fi
+fi
+
 # --- GRUB: bewaar de BTRFS-rootflags en houd os-prober bruikbaar ----------
 if [ -f /etc/default/grub ]; then
     if grep -q '^GRUB_TIMEOUT=' /etc/default/grub; then
@@ -145,9 +218,9 @@ if command -v sddm >/dev/null 2>&1; then
 fi
 
 # --- Diensten -------------------------------------------------------------
-for unit in sddm NetworkManager bluetooth snapper-timeline.timer \
-            snapper-cleanup.timer grub-btrfsd fstrim.timer systemd-timesyncd \
-            quickshell-gpu-setup.service; do
+for unit in sddm NetworkManager bluetooth snapper-boot.timer \
+            snapper-timeline.timer snapper-cleanup.timer grub-btrfsd \
+            fstrim.timer systemd-timesyncd quickshell-gpu-setup.service; do
     systemctl enable "$unit" >/dev/null 2>&1 || true
 done
 systemctl set-default graphical.target >/dev/null 2>&1 || true

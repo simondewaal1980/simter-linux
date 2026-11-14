@@ -28,6 +28,8 @@ lb config noauto \
   --win32-loader false \
   --initsystem systemd \
   --initramfs live-boot \
+  --chroot-squashfs-compression-type zstd \
+  --chroot-squashfs-compression-level 3 \
   --linux-flavours amd64 \
   --linux-packages "linux-image" \
   --iso-application "Quickshell Desktop" \

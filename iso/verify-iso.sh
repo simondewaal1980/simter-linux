@@ -62,6 +62,8 @@ check "/usr/share/backgrounds/quickshell/wallpaper.jpg"
 check "/usr/bin/grub-btrfsd"
 check "/etc/grub.d/41_snapshots-btrfs"
 check "/etc/default/grub-btrfs/config"
+check "/etc/overlayroot.conf"
+check "/usr/share/initramfs-tools/scripts/init-bottom/overlayroot"
 check "/usr/lib/live/config/9999-calamares"
 check "/usr/bin/setfacl"
 check "/usr/local/bin/quickshell-session"
@@ -122,10 +124,14 @@ for file in settings.conf modules/mount.conf modules/partition.conf; do
     unsquashfs -cat "$TMP/filesystem.squashfs" "etc/calamares/$file" \
         >"$TMP/$(basename "$file")" 2>/dev/null
 done
-grep -q '@rootfs' "$TMP/mount.conf" && echo "OK   subvolume @rootfs" || {
-    echo "FOUT subvolume @rootfs ontbreekt" >&2
-    failures=$((failures + 1))
-}
+for subvol in '@rootfs' '@home' '@log' '@cache' '@tmp' '@spool'; do
+    if grep -q "subvolume: /$subvol" "$TMP/mount.conf"; then
+        echo "OK   subvolume $subvol"
+    else
+        echo "FOUT subvolume $subvol ontbreekt" >&2
+        failures=$((failures + 1))
+    fi
+done
 for opt in 'compress=zlib:3' 'discard=async' 'space_cache=v2' 'umask=0077'; do
     if grep -q "$opt" "$TMP/mount.conf"; then
         echo "OK   mountoptie $opt"
@@ -163,6 +169,14 @@ if grep -qx 'squashfs-root/usr/lib/systemd/system/grub-btrfsd.service' \
     echo "OK   grub-btrfsd.service aanwezig"
 else
     echo "FOUT grub-btrfsd.service ontbreekt" >&2
+    failures=$((failures + 1))
+fi
+if unsquashfs -cat "$TMP/filesystem.squashfs" \
+        usr/local/lib/quickshell/install-target.sh 2>/dev/null \
+        | grep -q 'overlayroot=tmpfs:recurse=0'; then
+    echo "OK   snapshot-entries overlagen alleen / (recurse=0)"
+else
+    echo "FOUT install-target zet de zuinige overlayroot-parameter niet" >&2
     failures=$((failures + 1))
 fi
 

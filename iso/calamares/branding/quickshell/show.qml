@@ -47,7 +47,9 @@ Presentation
             anchors.top: background2.bottom
             anchors.topMargin: 18
             text: qsTr("De installatie maakt een BTRFS-root in subvolume @rootfs,<br/>" +
-                       "met snapper-momentopnamen in /.snapshots.")
+                       "met aparte subvolumes voor /home en /var,<br/>" +
+                       "snapper-momentopnamen in /.snapshots en<br/>" +
+                       "een schrijfbare overlay voor snapshot-boots.")
             wrapMode: Text.WordWrap
             width: 640
             horizontalAlignment: Text.Center

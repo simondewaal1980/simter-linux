@@ -4,13 +4,19 @@ pragma Singleton
 //
 // De service controleert periodiek `apt list --upgradable` en
 // `flatpak remote-ls --updates`. Beide commando's zijn alleen-lezen en werken
-// zonder root; bijwerken gebeurt pas op verzoek via de popup of IPC.
+// zonder root. `apt list` leest de lokale pakketindex; die index wordt pas
+// bijgewerkt door `apt-get update`. Daarom draait een expliciete verversing
+// (`refresh(true)`, via de verversknop of `qs ipc call updates refresh`)
+// eerst `apt-get update` met elevatie. De periodieke controle en het openen
+// van de popup gebruiken de bestaande index, zodat daar geen
+// wachtwoordprompt voor nodig is.
 //
 // Flatpak is optioneel: ontbreekt het programma, dan blijft de service gewoon
 // APT-updates tonen. Voor APT is elevatie nodig; standaard wordt pkexec
 // gebruikt (net als bij Snapper). Met UPDATES_ELEVATE is dat te vervangen,
-// bijvoorbeeld "sudo -n" of leeg voor geen elevatie. UPDATES_APT_BIN en
-// UPDATES_FLATPAK_BIN zijn bedoeld voor tests of afwijkende installaties.
+// bijvoorbeeld "sudo -n" of leeg voor geen elevatie. UPDATES_APT_BIN,
+// UPDATES_APT_GET_BIN en UPDATES_FLATPAK_BIN zijn bedoeld voor tests of
+// afwijkende installaties.
 
 import QtQuick
 import Quickshell
@@ -24,6 +30,13 @@ Singleton {
         if (override && override.length > 0)
             return override
         return "apt"
+    }
+
+    readonly property string aptGetBin: {
+        const override = Quickshell.env("UPDATES_APT_GET_BIN")
+        if (override && override.length > 0)
+            return override
+        return "apt-get"
     }
 
     readonly property string flatpakBin: {
@@ -73,6 +86,12 @@ Singleton {
     property string aptError: ""
     property string flatpakOutput: ""
     property string flatpakError: ""
+
+    // Alleen bij een expliciete verversing wordt `apt-get update` gedraaid.
+    property bool wantIndexRefresh: false
+    property bool fetchingIndex: false
+    property string indexOutput: ""
+    property string indexError: ""
 
     property var updateQueue: []
     property string pendingUpdate: ""
@@ -207,10 +226,15 @@ Singleton {
 
     // --- Controleren ------------------------------------------------------
 
-    function refresh() {
+    // `fetchIndex` is alleen true bij een bewuste verversing: dan wordt eerst
+    // `apt-get update` gedraaid, zodat de lijst nieuwe pakketten laat zien.
+    // Zonder die stap leest `apt list --upgradable` de oude systeemindex en
+    // blijft het aantal updates dus achter.
+    function refresh(fetchIndex) {
         if (root.loading || root.busy)
             return
 
+        root.wantIndexRefresh = fetchIndex === true
         root.loading = true
         root.listingError = ""
         root.lastError = ""
@@ -233,6 +257,21 @@ Singleton {
     }
 
     function startListings() {
+        if (root.wantIndexRefresh && root.aptAvailable) {
+            root.wantIndexRefresh = false
+            root.fetchingIndex = true
+            root.indexOutput = ""
+            root.indexError = ""
+            indexProcess.running = true
+            indexGuardTimer.restart()
+            return
+        }
+
+        root.wantIndexRefresh = false
+        root.startPackageListings()
+    }
+
+    function startPackageListings() {
         root.pendingListings = 0
 
         if (root.aptAvailable) {
@@ -266,6 +305,7 @@ Singleton {
         if (root.pendingListings > 0)
             return
 
+        root.fetchingIndex = false
         root.loading = false
         root.checked = true
         root.lastUpdated = new Date()
@@ -286,8 +326,15 @@ Singleton {
         // nieuwe dependencies installeren of verouderde pakketten vervangen;
         // met een gewone `upgrade` blijven die als "kept back" staan.
         return root.elevationPrefix().concat([
-            "sh", "-c", "apt-get update && apt-get -y full-upgrade"
+            "sh", "-c", root.aptGetBin + " update && "
+                + root.aptGetBin + " -y full-upgrade"
         ])
+    }
+
+    function aptIndexRefreshCommand() {
+        // Alleen de pakketindex bijwerken; dit is de stap die `apt list
+        // --upgradable` nieuwe updates laat zien.
+        return root.elevationPrefix().concat([root.aptGetBin, "update"])
     }
 
     function flatpakUpdateCommand() {
@@ -363,6 +410,7 @@ Singleton {
             checked: root.checked,
             loading: root.loading,
             busy: root.busy,
+            refreshingIndex: root.fetchingIndex,
             aptAvailable: root.aptAvailable,
             flatpakAvailable: root.flatpakAvailable,
             error: root.lastError,
@@ -405,6 +453,40 @@ Singleton {
                 return
             }
             root.startListings()
+        }
+    }
+
+    // Alleen bij een expliciete verversing: eerst de APT-index bijwerken.
+    // Mislukt dit (geannuleerd, geen polkit-agent of geen netwerk), dan gaat
+    // de controle gewoon verder met de bestaande index.
+    Process {
+        id: indexProcess
+
+        command: root.aptIndexRefreshCommand()
+
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.indexOutput = text
+        }
+
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.indexError = text
+        }
+
+        onExited: (exitCode) => {
+            indexGuardTimer.stop()
+            root.fetchingIndex = false
+
+            if (exitCode !== 0 && exitCode !== 126) {
+                // 126 = de pkexec-dialoog is geannuleerd; dat is geen fout.
+                const detail = root.cleanError(root.indexError,
+                    root.indexOutput)
+                root.noteError("Pakketlijsten verversen mislukt"
+                    + (detail.length > 0 ? ": " + detail : ""))
+            }
+
+            root.startPackageListings()
         }
     }
 
@@ -500,6 +582,26 @@ Singleton {
             }
 
             root.finishUpdate(true)
+        }
+    }
+
+    // Zonder deze controle blijft `fetchingIndex` hangen als pkexec of
+    // apt-get niet gestart kan worden: QProcess levert dan geen
+    // exited-signaal. De tijd begint pas na het starten; een openstaande
+    // pkexec-dialoog houdt het proces draaiend en is dus geen time-out.
+    Timer {
+        id: indexGuardTimer
+        interval: 3000
+        repeat: false
+        running: false
+
+        onTriggered: {
+            if (!root.fetchingIndex || indexProcess.running)
+                return
+            root.fetchingIndex = false
+            root.noteError("Pakketlijsten verversen kon niet worden gestart"
+                + " (commando niet gevonden?)")
+            root.startPackageListings()
         }
     }
 

@@ -126,7 +126,9 @@ PanelWindow {
         bar.closePowerMenu()
         bar.closeSnapperPopup()
         tray.hideTooltip()
-        Updates.refresh()
+        // Alleen de bestaande index lezen; de verversknop in de popup doet
+        // de volledige controle inclusief `apt-get update`.
+        Updates.refresh(false)
         updatesPopup.visible = true
     }
 

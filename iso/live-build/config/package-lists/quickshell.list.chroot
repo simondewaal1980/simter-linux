@@ -93,6 +93,7 @@ nm-tray
 openssh-client
 openssl-provider-legacy
 os-prober
+overlayroot
 papirus-icon-theme
 passwd
 pavucontrol

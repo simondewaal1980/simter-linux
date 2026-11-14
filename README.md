@@ -50,14 +50,16 @@ hergebruikt. Zie `iso/README.md` voor de variabelen en het opruimen.
 
 De ISO komt in `iso/out/quickshell-desktop-amd64.iso` (met `.sha256`). Hij
 boot op BIOS en UEFI in een LXQt-live-sessie en start Calamares automatisch.
-De installer schrijft dezelfde BTRFS-indeling als de bronmachine:
+De installer schrijft een BTRFS-indeling die op snapper en snapshot-boots is
+ingericht:
 
 | Onderdeel | Waarde |
 |---|---|
 | EFI | GPT, 1 GiB FAT32 op `/boot/efi`, `umask=0077` |
-| Root | één BTRFS-partitie, subvolume `@rootfs` |
+| Root | één BTRFS-partitie met `@rootfs` op `/`, plus aparte subvolumes `@home`, `@log`, `@cache`, `@tmp` en `@spool` |
 | Mountopties | `noatime,compress=zlib:3,discard=async,space_cache=v2` |
 | Snapshots | snapper-configuratie `root`, geneste `/.snapshots`, 50 nummer- en 10 tijdlijnmomentopnamen, plus een snapshot-submenu in GRUB via grub-btrfs |
+| Snapshot-boot | `overlayroot=tmpfs:recurse=0`: alleen `/` krijgt een tijdelijke schrijfbare laag; `/home` en de aparte `/var`-subvolumes blijven gewoon writable |
 | Swap | geen (zoals op de bronmachine) |
 | Bootloader | GRUB met `rootflags=subvol=@rootfs` |
 
@@ -472,6 +474,45 @@ bij andere configuraties krijgt de rollbackknop een slotje. De popup waarschuwt
 verder en vraagt om een tweede klik. Handmatig kan het ook met
 `sudo snapper -c <config> rollback <nummer>`.
 
+#### Subvolume-indeling
+
+De installer maakt naast `@rootfs` vijf aparte subvolumes:
+
+| Subvolume | Mountpoint | Waarom apart |
+|---|---|---|
+| `@home` | `/home` | gebruikersdata mag nooit met een systeemrollback terugspringen |
+| `@log` | `/var/log` | logs blijven schrijfbaar tijdens een snapshot-boot en overleven een rollback |
+| `@cache` | `/var/cache` | pakket- en applicatiecache hoort niet in elke snapshot |
+| `@tmp` | `/var/tmp` | tijdelijke bestanden horen niet in een snapshot |
+| `@spool` | `/var/spool` | cron-, mail- en printwachtrijen blijven buiten de rollback |
+
+`/var/lib` blijft bewust in `@rootfs`: de dpkg- en systemd-status moeten bij
+een rollback exact meelopen met de rest van het systeem. De geneste
+`/.snapshots`-subvolume blijft onder `@rootfs` staan.
+
+#### Snapshot booten
+
+Snapper bewaart momentopnamen als alleen-lezen subvolumes. De aparte
+subvolumes hierboven blijven tijdens zo'n boot schrijfbaar, maar `/etc`,
+`/usr` en `/var/lib` niet. De installer zet daarom `overlayroot` in het
+systeem en geeft alleen de snapshot-entries in GRUB de kernelparameter
+`overlayroot=tmpfs:recurse=0`. Daardoor krijgt alleen `/` een tijdelijke
+schrijfbare laag in RAM; de aparte subvolumes worden gewoon writable gemount.
+De snapshot zelf blijft onaangeroerd en systeemwijzigingen verdwijnen na het
+afsluiten, terwijl logs en gebruikersdata bewaard blijven.
+
+Op een bestaande installatie zet je dit alsnog aan met:
+
+```bash
+sudo scripts/setup-snapshot-boot.sh --create
+```
+
+Heeft die installatie nog geen aparte subvolumes, dan kiest het script
+automatisch `overlayroot=tmpfs` en wordt de hele root geoverlayd. Alleen
+snapshots die na de stap zijn gemaakt, bevatten de nieuwe initramfs met
+overlayroot. Oudere snapshots blijven bruikbaar voor rollback, maar niet voor
+een volledige desktop-boot.
+
 ### Updates
 
 `UpdatesWidget` toont het aantal beschikbare updates uit twee bronnen:
@@ -479,8 +520,17 @@ APT (`apt list --upgradable`) en Flatpak (`flatpak remote-ls --updates`).
 Klikken opent een popup met de pakketten per bron, de oude en nieuwe versie
 (bij APT) of de versie en remote (bij Flatpak), en de knop **Bijwerken**. Die
 knop werkt eerst de systeempakketten bij en daarna de Flatpaks; omdat dit
-systeemwijzigingen zijn, vraagt hij om een tweede klik. De lijst ververst elke
-30 minuten en bij het openen van de popup.
+systeemwijzigingen zijn, vraagt hij om een tweede klik.
+
+`apt list --upgradable` leest de lokale APT-index in `/var/lib/apt/lists`; die
+index wordt pas bijgewerkt door `apt-get update`. De 30-minutencontrole en het
+openen van de popup gebruiken daarom de bestaande index en vragen geen
+bevoegdheid. De verversknop in de popup (en `qs ipc call updates refresh`)
+draait eerst `pkexec apt-get update` en leest daarna opnieuw. Zo verschijnen
+ook pakketten die sinds de vorige systeemupdate in de repository zijn
+gepubliceerd. Wordt de polkit-dialoog geannuleerd of is er geen netwerk, dan
+valt de widget terug op de bestaande index en blijft de laatst bekende lijst
+staan.
 
 APT-updates worden met
 `pkexec sh -c "apt-get update && apt-get -y full-upgrade"` uitgevoerd;
@@ -488,8 +538,9 @@ Flatpak regelt eventuele bevoegdheid zelf via polkit. `full-upgrade` is nodig
 voor updates die nieuwe dependencies installeren of verouderde pakketten
 vervangen; met een gewone `upgrade` blijven die als “kept back” in de lijst
 staan. Met `UPDATES_ELEVATE` is het elevatiecommando te vervangen (bijvoorbeeld
-`UPDATES_ELEVATE='sudo -n'` of leeg voor geen elevatie). `UPDATES_APT_BIN` en
-`UPDATES_FLATPAK_BIN` zijn handig voor tests of een afwijkende installatie.
+`UPDATES_ELEVATE='sudo -n'` of leeg voor geen elevatie). `UPDATES_APT_BIN`,
+`UPDATES_APT_GET_BIN` en `UPDATES_FLATPAK_BIN` zijn handig voor tests of een
+afwijkende installatie.
 Ontbreekt Flatpak, dan blijft de widget APT-updates tonen en staat in de popup
 alleen de melding dat Flatpak ontbreekt.
 
@@ -625,6 +676,7 @@ qs -p ~/projecten/quickshell ipc call wallpaper add ~/Pictures/foto.jpg
 | Snapper-widget zegt “Geen toegang” | Draai eenmalig `sudo scripts/setup-snapper-access.sh` (zet `ALLOW_USERS` + `SYNC_ACL`; zie **Snapper**). Met polkit kan het ook via `pkexec scripts/setup-snapper-access.sh "$USER"`. Het exacte commando staat ook in de popup |
 | Snapper-actie vraagt om bevoegdheid maar er gebeurt niets | Controleer of `lxqt-policykit-agent` draait (`pgrep -af lxqt-policykit-agent`); stel anders `ALLOW_USERS` in (dan is pkexec niet nodig) of gebruik `SNAPPER_ELEVATE='sudo -n'` |
 | Updates blijven staan na **Bijwerken** | De resterende pakketten zijn “kept back” en vragen `apt-get full-upgrade` (nieuwe dependencies of te vervangen pakketten). De widget gebruikt dat commando; klik nogmaals op **Bijwerken**. Controleer vooraf met `apt-get -s full-upgrade` |
+| Widget ziet geen nieuwe updates | De controle leest de lokale APT-index. Klik op de verversknop in de popup of gebruik `qs ipc call updates refresh`; die draait eerst `pkexec apt-get update` en leest daarna opnieuw |
 | `Super+Alt+L` vergrendelt niet | Er is geen locker geïnstalleerd; installeer `i3lock` of `xsecurelock`. Het script toont nu een melding |
 | Geen polkit-popups | `bspwmrc` start `lxqt-policykit-agent` (uit `lxqt-policykit`); controleer `pgrep -af lxqt-policykit-agent` en `systemctl status polkit polkit-agent-helper.socket`. `lxpolkit` is een alternatief, maar werkte op deze machine niet met polkit 128 |
 | `bspc wm -r` verbreekt de bar | De Bspwm-service herverbindt binnen enkele seconden; geen actie nodig |
